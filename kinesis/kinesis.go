@@ -94,7 +94,7 @@ func NewOutputPlugin(region, stream, dataKeys, partitionKey, roleARN, endpoint s
     seededRand := rand.New(rand.NewSource(time.Now().UnixNano()))
     random := &random{
         seededRandom:   seededRand,
-        buffer:         b := make([]byte, 8),
+        buffer:         make([]byte, 8),
     }
 
     return &OutputPlugin{
