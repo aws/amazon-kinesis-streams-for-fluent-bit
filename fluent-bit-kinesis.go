@@ -17,6 +17,7 @@ import (
     "fmt"
     "C"
     "unsafe"
+    "strings"
 
     "github.com/aws/amazon-kinesis-streams-for-fluent-bit/kinesis"
     "github.com/aws/amazon-kinesis-firehose-for-fluent-bit/plugins"
@@ -54,11 +55,13 @@ func newKinesisOutput(ctx unsafe.Pointer, pluginID int) (*kinesis.OutputPlugin, 
     dataKeys := output.FLBPluginConfigKey(ctx, "data_keys")
     logrus.Infof("[kinesis %d] plugin parameter data_keys = '%s'", pluginID, dataKeys)
     partitionKey := output.FLBPluginConfigKey(ctx, "partition_key")
-    logrus.Infof("[kinesis %d] plugin parameter partition_key = %s", pluginID, partitionKey)
+    logrus.Infof("[kinesis %d] plugin parameter partition_key = '%s'", pluginID, partitionKey)
     roleARN := output.FLBPluginConfigKey(ctx, "role_arn")
     logrus.Infof("[kinesis %d] plugin parameter role_arn = '%s'", pluginID, roleARN)
     endpoint := output.FLBPluginConfigKey(ctx, "endpoint")
     logrus.Infof("[kinesis %d] plugin parameter endpoint = '%s'", pluginID, endpoint)
+    appendNewline := output.FLBPluginConfigKey(ctx, "append_newline")
+    logrus.Infof("[kinesis %d] plugin parameter append_newline = %s", pluginID, appendNewline)
 
     if stream == "" || region == "" {
         return nil, fmt.Errorf("[kinesis %d] stream and region are required configuration parameters", pluginID)
@@ -72,7 +75,11 @@ func newKinesisOutput(ctx unsafe.Pointer, pluginID int) (*kinesis.OutputPlugin, 
         logrus.Infof("[kinesis %d] no partition key provided. A random one will be generated.", pluginID)
     }
 
-    return kinesis.NewOutputPlugin(region, stream, dataKeys, partitionKey, roleARN, endpoint, pluginID)
+    appendNL := false
+    if  strings.ToLower(appendNewline) == "true" {
+        appendNL = true
+    }
+    return kinesis.NewOutputPlugin(region, stream, dataKeys, partitionKey, roleARN, endpoint, appendNL, pluginID)
 }
 
 

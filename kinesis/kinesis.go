@@ -59,6 +59,7 @@ type OutputPlugin struct {
     stream                          string
     dataKeys                        string
     partitionKey                    string
+    appendNewline                   bool
     lastInvalidPartitionKeyIndex    int
     client                          PutRecordsClient
     records                         []*kinesis.PutRecordsRequestEntry
@@ -70,7 +71,7 @@ type OutputPlugin struct {
 }
 
 // NewOutputPlugin creates an OutputPlugin object
-func NewOutputPlugin(region, stream, dataKeys, partitionKey, roleARN, endpoint string, pluginID int) (*OutputPlugin, error) {
+func NewOutputPlugin(region, stream, dataKeys, partitionKey, roleARN, endpoint string, appendNewline bool, pluginID int) (*OutputPlugin, error) {
     sess, err := session.NewSession(&aws.Config{
         Region: aws.String(region),
     })
@@ -104,6 +105,7 @@ func NewOutputPlugin(region, stream, dataKeys, partitionKey, roleARN, endpoint s
         records:                        records,
         dataKeys:                       dataKeys,
         partitionKey:                   partitionKey,
+        appendNewline:                  appendNewline,
         lastInvalidPartitionKeyIndex:   -1,
         backoff:                        plugins.NewBackoff(),
         timer:                          timer,
@@ -193,8 +195,10 @@ func (outputPlugin *OutputPlugin) processRecord(record map[interface{}]interface
         return nil, err
     }
 
-    // append newline
-    data = append(data, []byte("\n")...)
+    // append a newline after each log record
+    if outputPlugin.appendNewline {
+        data = append(data, []byte("\n")...)
+    }
 
     if len(data) > maximumRecordSize {
         return nil, fmt.Errorf("Log record greater than max size allowed by Kinesis")
