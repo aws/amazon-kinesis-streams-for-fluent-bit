@@ -90,11 +90,11 @@ func NewOutputPlugin(region, stream, dataKeys, partitionKey, roleARN, endpoint s
     if err != nil {
         return nil, err
     }
+
     seededRand := rand.New(rand.NewSource(time.Now().UnixNano()))
-    b := make([]byte, 8)
     random := &random{
         seededRandom:   seededRand,
-        buffer:         b,
+        buffer:         b := make([]byte, 8),
     }
 
     return &OutputPlugin{
@@ -205,7 +205,7 @@ func (outputPlugin *OutputPlugin) processRecord(record map[interface{}]interface
 
 func (outputPlugin *OutputPlugin) sendCurrentBatch() error {
     if outputPlugin.lastInvalidPartitionKeyIndex >= 0 {
-        logrus.Infof("[kinesis %d] Invalid partition key. Failed to find partition_key %s in log record %s.", outputPlugin.PluginID, outputPlugin.partitionKey, outputPlugin.records[outputPlugin.lastInvalidPartitionKeyIndex].Data)
+        logrus.Errorf("[kinesis %d] Invalid partition key. Failed to find partition_key %s in log record %s.", outputPlugin.PluginID, outputPlugin.partitionKey, outputPlugin.records[outputPlugin.lastInvalidPartitionKeyIndex].Data)
         outputPlugin.lastInvalidPartitionKeyIndex = -1
     }
     outputPlugin.backoff.Wait()

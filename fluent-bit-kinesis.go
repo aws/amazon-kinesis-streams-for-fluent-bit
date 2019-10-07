@@ -14,6 +14,7 @@
 package main
 
 import (
+    "fmt"
     "C"
     "unsafe"
 
@@ -21,9 +22,6 @@ import (
     "github.com/aws/amazon-kinesis-firehose-for-fluent-bit/plugins"
     "github.com/fluent/fluent-bit-go/output"
     "github.com/sirupsen/logrus"
-)
-import (
-    "fmt"
 )
 
 var (
@@ -89,7 +87,7 @@ func FLBPluginRegister(ctx unsafe.Pointer) int {
 //export FLBPluginInit
 func  FLBPluginInit(ctx unsafe.Pointer) int {
     plugins.SetupLogger()
-
+    logrus.Debugf("[kinesis] Debug log level test successful")
     err := addPluginInstance(ctx)
     if err != nil {
         logrus.Errorf("[kinesis] Failed to initialize plugin: %v\n", err)
