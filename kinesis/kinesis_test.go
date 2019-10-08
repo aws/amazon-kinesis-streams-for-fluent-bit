@@ -34,7 +34,6 @@ func newMockOutputPlugin(client *mock_kinesis.MockPutRecordsClient) (*OutputPlug
     }
 
     return &OutputPlugin{
-        region:                         "us-west-2",
         stream:                         "stream",
         client:                         client,
         records:                        records,
@@ -63,21 +62,6 @@ func TestStringOrByteArray(t *testing.T) {
 func TestStringOrByteArrayWithNil(t *testing.T) {
     s := stringOrByteArray(nil)
     assert.Equal(t, s, "", "Expected value to be an empty string")
-}
-
-func TestRandomString(t *testing.T) {
-    randomStringMap := make(map[string]bool)
-    outputPlugin, _ := newMockOutputPlugin(nil)
-
-    for i := 0; i < 10; i++ {
-        s := outputPlugin.randomString()
-        if _, isInMap := randomStringMap[s]; isInMap {
-            t.Errorf("Duplicate value found")
-            break
-        }else{
-            randomStringMap[s] = true
-        }
-    }
 }
 
 func TestAddRecord(t *testing.T) {
@@ -111,19 +95,4 @@ func TestAddRecordAndFlush(t *testing.T) {
 
     err := outputPlugin.Flush()
     assert.NoError(t, err, "Unexpected error calling flush")
-}
-
-func BenchmarkRandomString(b *testing.B) {
-    randomStringMap := make(map[string]bool)
-    outputPlugin, _ := newMockOutputPlugin(nil)
-
-    for i := 0; i < b.N; i++ {
-        s := outputPlugin.randomString()
-        if _, isInMap := randomStringMap[s]; isInMap {
-              b.Errorf("Duplicate value found")
-              break
-        }else{
-             randomStringMap[s] = true
-        }
-    }
 }

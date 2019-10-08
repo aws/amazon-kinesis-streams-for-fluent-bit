@@ -11,7 +11,7 @@
 // express or implied. See the License for the specific language governing
 // permissions and limitations under the License.
 
-// Package kinesis containers the OutputPlugin which sends log records to Kinesis Stream
+// Package kinesis contains the OutputPlugin which sends log records to Kinesis Stream
 package kinesis
 
 import (
@@ -39,8 +39,8 @@ const (
 const (
     // Kinesis API Limit https://docs.aws.amazon.com/sdk-for-go/api/service/kinesis/#Kinesis.PutRecords
     maximumRecordsPerPut      = 500
-    maximumPutRecordBatchSize = 5242880 // 5 MB
-    maximumRecordSize         = 1048576// 1 MB
+    maximumPutRecordBatchSize = 1024 * 1024 * 5 // 5 MB
+    maximumRecordSize         = 1024 * 1024 // 1 MB
 )
 
 // PutRecordsClient contains the kinesis PutRecords method call
@@ -55,10 +55,15 @@ type random struct {
 
 // OutputPlugin sends log records to kinesis
 type OutputPlugin struct {
-    region                          string
+    // The name of the stream that you want log records sent to
     stream                          string
+    // If specified, only these keys and values will be send as the log record
     dataKeys                        string
+    // If specified, the value of that data key will be used as the partition key. 
+    // Otherwise a random string will be used.
+    // Partition key decides in which shard of your stream the data belongs to
     partitionKey                    string
+    // Decides whether to append a newline after each data record
     appendNewline                   bool
     lastInvalidPartitionKeyIndex    int
     client                          PutRecordsClient
@@ -99,7 +104,6 @@ func NewOutputPlugin(region, stream, dataKeys, partitionKey, roleARN, endpoint s
     }
 
     return &OutputPlugin{
-        region:                         region,
         stream:                         stream,
         client:                         client,
         records:                        records,
@@ -209,7 +213,7 @@ func (outputPlugin *OutputPlugin) processRecord(record map[interface{}]interface
 
 func (outputPlugin *OutputPlugin) sendCurrentBatch() error {
     if outputPlugin.lastInvalidPartitionKeyIndex >= 0 {
-        logrus.Errorf("[kinesis %d] Invalid partition key. Failed to find partition_key %s in log record %s.", outputPlugin.PluginID, outputPlugin.partitionKey, outputPlugin.records[outputPlugin.lastInvalidPartitionKeyIndex].Data)
+        logrus.Errorf("[kinesis %d] Invalid partition key. Failed to find partition_key %s in log record %s", outputPlugin.PluginID, outputPlugin.partitionKey, outputPlugin.records[outputPlugin.lastInvalidPartitionKeyIndex].Data)
         outputPlugin.lastInvalidPartitionKeyIndex = -1
     }
     outputPlugin.backoff.Wait()
