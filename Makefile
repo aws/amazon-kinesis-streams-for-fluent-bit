@@ -19,25 +19,21 @@ SCRIPT_PATH := $(ROOT)/scripts/:${PATH}
 SOURCES := $(shell find . -name '*.go')
 PLUGIN_BINARY := ./bin/kinesis.so
 
-.PHONY: build
-build: $(PLUGIN_BINARY)
-
-$(PLUGIN_BINARY): $(SOURCES)
-	PATH=${PATH} golint ./kinesis
-	mkdir -p ./bin
-	go build -buildmode c-shared -o ./bin/kinesis.so ./
-	@echo "Built Amazon Kinesis Data Streams Fluent Bit Plugin"
-
 .PHONY: release
 release:
 	mkdir -p ./bin
 	go build -buildmode c-shared -o ./bin/kinesis.so ./
 	@echo "Built Amazon Kinesis Data Streams Fluent Bit Plugin"
 
+.PHONY: build 
+build: $(PLUGIN_BINARY) release
+
+$(PLUGIN_BINARY): $(SOURCES)
+	PATH=${PATH} golint ./kinesis	
+
 .PHONY: generate
 generate: $(SOURCES)
 	PATH=$(SCRIPT_PATH) go generate ./...
-
 
 .PHONY: test
 test:

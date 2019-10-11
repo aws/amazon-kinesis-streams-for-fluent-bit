@@ -77,14 +77,10 @@ type OutputPlugin struct {
 
 // NewOutputPlugin creates an OutputPlugin object
 func NewOutputPlugin(region, stream, dataKeys, partitionKey, roleARN, endpoint string, appendNewline bool, pluginID int) (*OutputPlugin, error) {
-    sess, err := session.NewSession(&aws.Config{
-        Region: aws.String(region),
-    })
+    client, err := newPutRecordsClient(roleARN, region, endpoint)
     if err != nil {
         return nil, err
     }
-
-    client := newPutRecordsClient(roleARN, sess, endpoint)
 
     records := make([]*kinesis.PutRecordsRequestEntry, 0, maximumRecordsPerPut)
     timer, err := plugins.NewTimeout(func (d time.Duration) {
@@ -119,7 +115,14 @@ func NewOutputPlugin(region, stream, dataKeys, partitionKey, roleARN, endpoint s
 }
 
 // newPutRecordsClient creates the Kinesis client for calling the PutRecords method
-func newPutRecordsClient(roleARN string, sess *session.Session, endpoint string) *kinesis.Kinesis {
+func newPutRecordsClient(roleARN string, awsRegion string, endpoint string) (*kinesis.Kinesis, error) {
+    sess, err := session.NewSession(&aws.Config{
+        Region: aws.String(awsRegion),
+    })
+    if err != nil {
+        return nil, err
+    }
+
     svcConfig := &aws.Config{}
     if endpoint != "" {
         defaultResolver := endpoints.DefaultResolver()
@@ -141,12 +144,12 @@ func newPutRecordsClient(roleARN string, sess *session.Session, endpoint string)
 
     client := kinesis.New(sess, svcConfig)
     client.Handlers.Build.PushBackNamed(plugins.CustomUserAgentHandler())
-    return client
+    return client, nil
 }
 
 // AddRecord accepts a record and adds it to the buffer, flushing the buffer if it is full
 // the return value is one of: FLB_OK FLB_RETRY
-// API Errors lead to an FLB_RETRY, and all other errors are logged, the record is discarded and FLB_OK is returned
+// API Errors lead to an FLB_RETRY, and data processing errors are logged, the record is discarded and FLB_OK is returned
 func (outputPlugin *OutputPlugin) AddRecord(record map[interface{}]interface{}) int {
     data, err := outputPlugin.processRecord(record)
     if err != nil {
@@ -161,7 +164,7 @@ func (outputPlugin *OutputPlugin) AddRecord(record map[interface{}]interface{}) 
         err = outputPlugin.sendCurrentBatch()
         if err != nil {
             logrus.Errorf("[kinesis %d] %v\n", outputPlugin.PluginID, err)
-            // send failures are retryable
+            // If FluentBit fails to send logs, it will retry rather than discarding the logs
             return fluentbit.FLB_RETRY
         }
     }
@@ -175,7 +178,7 @@ func (outputPlugin *OutputPlugin) AddRecord(record map[interface{}]interface{}) 
     return fluentbit.FLB_OK
 }
 
-// Flush sends the current buffer of records
+// Flush sends the current buffer of log records
 func (outputPlugin *OutputPlugin) Flush() error {
     return outputPlugin.sendCurrentBatch()
 }

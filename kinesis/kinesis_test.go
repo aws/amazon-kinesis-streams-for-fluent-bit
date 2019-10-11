@@ -47,21 +47,24 @@ func newMockOutputPlugin(client *mock_kinesis.MockPutRecordsClient) (*OutputPlug
     }, nil
 }
 
-func TestStringOrByteArray(t *testing.T) {
-    s := stringOrByteArray("testString")
-    assert.Equal(t, s, "testString", "Expected value to be a non-empty string")
-
-    s = stringOrByteArray(2353425)
-    assert.Equal(t, s, "", "Expected value to be an empty string")
-
-    b := []byte{'b', 'y', 't', 'e'}
-    s = stringOrByteArray(b)
-    assert.Equal(t, s, "byte", "Expected value to be a non-empty string")
+// Test cases for TestStringOrByteArray
+var testCases = []struct {
+    input   interface{}
+    output  string
+}{
+    {"testString", "testString"},
+    {35344, ""},
+    {[]byte{'b', 'y', 't', 'e'}, "byte"},
+    {nil, ""},
 }
 
-func TestStringOrByteArrayWithNil(t *testing.T) {
-    s := stringOrByteArray(nil)
-    assert.Equal(t, s, "", "Expected value to be an empty string")
+func TestStringOrByteArray(t *testing.T) {
+    for _, testCase := range testCases {
+        result := stringOrByteArray(testCase.input)
+        if result != testCase.output {
+            t.Errorf("[Test Failed] Expeced: %s, Returned: %s", testCase.output, result)
+        }
+    }
 }
 
 func TestAddRecord(t *testing.T) {
