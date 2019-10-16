@@ -38,9 +38,11 @@ const (
 
 const (
     // Kinesis API Limit https://docs.aws.amazon.com/sdk-for-go/api/service/kinesis/#Kinesis.PutRecords
-    maximumRecordsPerPut      = 500
-    maximumPutRecordBatchSize = 1024 * 1024 * 5 // 5 MB
-    maximumRecordSize         = 1024 * 1024 // 1 MB
+    maximumRecordsPerPut        = 500
+    maximumPutRecordBatchSize   = 1024 * 1024 * 5 // 5 MB
+    maximumRecordSize           = 1024 * 1024 // 1 MB
+
+    partitionKeyMaxLength       = 256
 )
 
 // PutRecordsClient contains the kinesis PutRecords method call
@@ -305,8 +307,8 @@ func (outputPlugin *OutputPlugin) getPartitionKey(record map[interface{}]interfa
             if(dataKey == partitionKey) {
                 value := stringOrByteArray(v)
                 if(value != "") {
-                    if len(value) > 256 {
-                        value = value[0:256]
+                    if len(value) > partitionKeyMaxLength {
+                        value = value[0:partitionKeyMaxLength]
                     }
                     return value
                 }
