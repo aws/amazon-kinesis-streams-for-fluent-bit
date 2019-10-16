@@ -9,11 +9,12 @@ If you think you’ve found a potential security issue, please do not post it in
 ### Plugin Options
 
 * `region`: The region which your Kinesis Data Stream is in.
-* `stream`: The name of the stream that you want log records sent to.
+* `stream`: The name of the Kinesis Data Stream that you want log records sent to.
 * `partition_key`: A partition key is used to group data by shard within a stream. A Kinesis Data Stream uses the partition key that is associated with each data record to determine which shard a given data record belongs to. For example, if your logs come from Docker containers, you can use container_id as the partition key, and the logs will be grouped and stored on different shards depending upon the id of the container they were generated from. As the data within a shard are coarsely ordered, you will get all your logs from one container in one shard roughly in order. If you don't set a partition key or put an invalid one, a random key will be generated, and the logs will be directed to random shards. If the partition key is invalid, the plugin will print an warning message.
 * `data_keys`: By default, the whole log record will be sent to Kinesis. If you specify key name(s) with this option, then only those keys and values will be sent to Kinesis. For example, if you are using the Fluentd Docker log driver, you can specify `data_keys log` and only the log message will be sent to Kinesis. If you specify multiple keys, they should be comma delimited.
 * `role_arn`: ARN of an IAM role to assume (for cross account access).
 * `endpoint`: Specify a custom endpoint for the Kinesis Streams API.
+* `append_newline`: If you set append_newline as true, a newline will be addded after each log record. 
 
 ### Permissions
 
@@ -21,7 +22,7 @@ The plugin requires `kinesis:PutRecords` permissions.
 
 ### Credentials
 
-This plugin uses the AWS SDK Go, and uses its [default credential provider chain](https://docs.aws.amazon.com/sdk-for-go/v1/developer-guide/configuring-sdk.html). If you are using the plugin on Amazon EC2 or Amazon ECS, the plugin will use your EC2 instance role or ECS Task role permissions. The plugin can also retrieve credentials from a (shared credentials file)[https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-files.html], or from the standard `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN` environment variables.
+This plugin uses the AWS SDK for Go, and uses its [default credential provider chain](https://docs.aws.amazon.com/sdk-for-go/v1/developer-guide/configuring-sdk.html). If you are using the plugin on Amazon EC2 or Amazon ECS, the plugin will use your EC2 instance role or ECS Task role permissions. The plugin can also retrieve credentials from a (shared credentials file)[https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-files.html], or from the standard `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN` environment variables.
 
 ### Environment Variables
 
@@ -46,4 +47,5 @@ This plugin has been tested with Fluent Bit 1.2.0+. It may not work with older F
     region          us-west-2
     stream          my-kinesis-stream-name
     partition_key   container_id
+    append_newline  true
 ```
