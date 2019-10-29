@@ -94,7 +94,6 @@ func FLBPluginRegister(ctx unsafe.Pointer) int {
 //export FLBPluginInit
 func  FLBPluginInit(ctx unsafe.Pointer) int {
     plugins.SetupLogger()
-    logrus.Debugf("[kinesis] Debug log level test successful")
     err := addPluginInstance(ctx)
     if err != nil {
         logrus.Errorf("[kinesis] Failed to initialize plugin: %v\n", err)
@@ -134,7 +133,7 @@ func FLBPluginFlushCtx(ctx, data unsafe.Pointer, length C.int, tag *C.char) int 
         logrus.Errorf("[kinesis %d] %v\n", kinesisOutput.PluginID, err)
         return output.FLB_ERROR
     }
-    logrus.Debugf("[kinesis %d] Processed %d events with tag %s\n", kinesisOutput.PluginID, count, fluentTag)
+    logrus.Infof("[kinesis %d] Processed %d events with tag %s\n", kinesisOutput.PluginID, count, fluentTag)
 
     return output.FLB_OK
 }
