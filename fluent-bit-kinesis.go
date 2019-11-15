@@ -133,7 +133,7 @@ func FLBPluginFlushCtx(ctx, data unsafe.Pointer, length C.int, tag *C.char) int 
         logrus.Errorf("[kinesis %d] %v\n", kinesisOutput.PluginID, err)
         return output.FLB_ERROR
     }
-    logrus.Infof("[kinesis %d] Processed %d events with tag %s\n", kinesisOutput.PluginID, count, fluentTag)
+    logrus.Debugf("[kinesis %d] Processed %d events with tag %s\n", kinesisOutput.PluginID, count, fluentTag)
 
     return output.FLB_OK
 }
