@@ -276,10 +276,7 @@ func (outputPlugin *OutputPlugin) processAPIResponse(response *kinesis.PutRecord
             outputPlugin.dataLength += len(record.Data)
         }
     } else {
-        //request fully succeeded
-        for i, record := range response.Records {
-            logrus.Debugf("[kinesis %d] record- %d:Shard ID: %s", outputPlugin.PluginID, i, aws.StringValue(record.ShardId))
-        }
+        // request fully succeeded
         outputPlugin.timer.Reset()
         outputPlugin.backoff.Reset()
         outputPlugin.records = outputPlugin.records[:0]
@@ -288,8 +285,8 @@ func (outputPlugin *OutputPlugin) processAPIResponse(response *kinesis.PutRecord
     return nil
 }
 
-//randomString generates a random string of length 8
-//it uses the math/rand library
+// randomString generates a random string of length 8
+// it uses the math/rand library
 func (outputPlugin *OutputPlugin) randomString() string {
     for i := range outputPlugin.random.buffer {
         outputPlugin.random.buffer[i] = partitionKeyCharset[outputPlugin.random.seededRandom.Intn(len(partitionKeyCharset))]
@@ -297,8 +294,8 @@ func (outputPlugin *OutputPlugin) randomString() string {
     return string(outputPlugin.random.buffer)
 }
 
-//getPartitionKey returns the value for a given valid key
-//if the given key is emapty or invalid, it returns a random string
+// getPartitionKey returns the value for a given valid key
+// if the given key is emapty or invalid, it returns a random string
 func (outputPlugin *OutputPlugin) getPartitionKey(record map[interface{}]interface{}) string {
     partitionKey := outputPlugin.partitionKey
     if partitionKey != "" {
@@ -319,7 +316,7 @@ func (outputPlugin *OutputPlugin) getPartitionKey(record map[interface{}]interfa
     return outputPlugin.randomString()
 }
 
-//stringOrByteArray returns the string value if the input is a string or byte array otherwise an empty string 
+// stringOrByteArray returns the string value if the input is a string or byte array otherwise an empty string 
 func stringOrByteArray(v interface{}) string {
     switch t := v.(type) {
         case []byte:
