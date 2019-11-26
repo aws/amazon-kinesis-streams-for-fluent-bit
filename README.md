@@ -14,7 +14,7 @@ If you think you’ve found a potential security issue, please do not post it in
 * `data_keys`: By default, the whole log record will be sent to Kinesis. If you specify key name(s) with this option, then only those keys and values will be sent to Kinesis. For example, if you are using the Fluentd Docker log driver, you can specify `data_keys log` and only the log message will be sent to Kinesis. If you specify multiple keys, they should be comma delimited.
 * `role_arn`: ARN of an IAM role to assume (for cross account access).
 * `endpoint`: Specify a custom endpoint for the Kinesis Streams API.
-* `append_newline`: If you set append_newline as true, a newline will be addded after each log record. 
+* `append_newline`: If you set append_newline as true, a newline will be addded after each log record.
 
 ### Permissions
 
@@ -49,3 +49,25 @@ This plugin has been tested with Fluent Bit 1.2.0+. It may not work with older F
     partition_key   container_id
     append_newline  true
 ```
+
+### AWS for Fluent Bit
+
+We distribute a container image with Fluent Bit and this plugin.
+
+##### GitHub
+
+[github.com/aws/aws-for-fluent-bit](https://github.com/aws/aws-for-fluent-bit)
+
+##### Docker Hub
+
+[amazon/aws-for-fluent-bit](https://hub.docker.com/r/amazon/aws-for-fluent-bit/tags)
+
+##### Amazon ECR
+
+You can use our SSM Public Parameters to find the Amazon ECR image URI in your region:
+
+```
+aws ssm get-parameters-by-path --path /aws/service/aws-for-fluent-bit/
+```
+
+For more see [our docs](https://github.com/aws/aws-for-fluent-bit#public-images).
