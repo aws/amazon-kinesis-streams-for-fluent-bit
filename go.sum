@@ -1,6 +1,6 @@
-github.com/aws/amazon-kinesis-firehose-for-fluent-bit v0.0.0-20190911230620-0883cb76f511 h1:h4ta9iM29D9zSiLCmr7ybUY5qcv2QgP+GVjipJ1Kx/4=
-github.com/aws/amazon-kinesis-firehose-for-fluent-bit v0.0.0-20190911230620-0883cb76f511/go.mod h1:jZjLd+hsaK0oNVotfqbMK9gUsIhXvYEl7Z3tdZTYa54=
-github.com/aws/aws-sdk-go v1.20.6/go.mod h1:KmX6BPdI08NWTb3/sm4ZGu5ShLoqVDhKgpiN924inxo=
+github.com/aws/amazon-kinesis-firehose-for-fluent-bit v1.0.1-0.20191203194629-8f64e9241296 h1:6ynrEUDviRKRq0ovA7vEXT0Ti3KAoUMeJoh1L345rKo=
+github.com/aws/amazon-kinesis-firehose-for-fluent-bit v1.0.1-0.20191203194629-8f64e9241296/go.mod h1:Y0/MA0/A1/eRrr1h+1kcdt95B+pyWqAzuTnHfdYIQ00=
+github.com/aws/aws-sdk-go v1.25.43/go.mod h1:KmX6BPdI08NWTb3/sm4ZGu5ShLoqVDhKgpiN924inxo=
 github.com/aws/aws-sdk-go v1.25.47 h1:Y13LHLosjP35FPWae95teJC4eQH2YeKD0I0dVFZ4CUM=
 github.com/aws/aws-sdk-go v1.25.47/go.mod h1:KmX6BPdI08NWTb3/sm4ZGu5ShLoqVDhKgpiN924inxo=
 github.com/cenkalti/backoff v2.1.1+incompatible h1:tKJnvO2kl0zmb/jA5UKAt4VoEVw1qxKWjE/Bpp46npY=
