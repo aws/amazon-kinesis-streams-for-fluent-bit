@@ -11,11 +11,8 @@
 # ANY KIND, either express or implied. See the License for the specific
 # language governing permissions and limitations under the License.
 
-ROOT := $(shell pwd)
-
 all: build
 
-SCRIPT_PATH := $(ROOT)/scripts/:${PATH}
 SOURCES := $(shell find . -name '*.go')
 PLUGIN_BINARY := ./bin/kinesis.so
 
@@ -25,7 +22,7 @@ release:
 	go build -buildmode c-shared -o ./bin/kinesis.so ./
 	@echo "Built Amazon Kinesis Data Streams Fluent Bit Plugin"
 
-.PHONY: build 
+.PHONY: build
 build: $(PLUGIN_BINARY) release
 
 $(PLUGIN_BINARY): $(SOURCES)
@@ -33,7 +30,7 @@ $(PLUGIN_BINARY): $(SOURCES)
 
 .PHONY: generate
 generate: $(SOURCES)
-	PATH=$(SCRIPT_PATH) go generate ./...
+	go generate ./...
 
 .PHONY: test
 test:

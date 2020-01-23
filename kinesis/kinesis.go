@@ -11,6 +11,8 @@
 // express or implied. See the License for the specific language governing
 // permissions and limitations under the License.
 
+//go:generate mockgen -destination mock_kinesis/mock_kinesis.go -copyright_file=../COPYRIGHT github.com/aws/amazon-kinesis-streams-for-fluent-bit/kinesis PutRecordsClient
+
 // Package kinesis contains the OutputPlugin which sends log records to Kinesis Stream
 package kinesis
 
