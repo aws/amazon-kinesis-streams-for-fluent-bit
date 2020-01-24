@@ -1,6 +1,7 @@
 package kinesis
 
 import (
+	"encoding/json"
 	"math/rand"
 	"os"
 	"testing"
@@ -44,6 +45,7 @@ func newMockOutputPlugin(client *mock_kinesis.MockPutRecordsClient) (*OutputPlug
 		timer:                        timer,
 		PluginID:                     0,
 		random:                       random,
+		replaceDots:                  true,
 	}, nil
 }
 
@@ -98,4 +100,28 @@ func TestAddRecordAndFlush(t *testing.T) {
 
 	err := outputPlugin.Flush()
 	assert.NoError(t, err, "Unexpected error calling flush")
+}
+
+func TestDotReplace(t *testing.T) {
+	record := map[interface{}]interface{}{
+		"testkey": []byte("test value"),
+		"kubernetes": map[interface{}]interface{}{
+			"app":                    []byte("test app label"),
+			"app.kubernetes.io/name": []byte("test key with dots"),
+		},
+	}
+
+	outputPlugin, _ := newMockOutputPlugin(nil)
+
+	retCode := outputPlugin.AddRecord(record)
+	assert.Equal(t, retCode, fluentbit.FLB_OK, "Expected return code to be FLB_OK")
+	assert.Len(t, outputPlugin.records, 1, "Expected output to contain 1 record")
+
+	data := outputPlugin.records[0].Data
+
+	var log map[string]map[string]interface{}
+	json.Unmarshal(data, &log)
+
+	assert.Equal(t, "test app label", log["kubernetes"]["app"])
+	assert.Equal(t, "test key with dots", log["kubernetes"]["app_kubernetes_io/name"])
 }

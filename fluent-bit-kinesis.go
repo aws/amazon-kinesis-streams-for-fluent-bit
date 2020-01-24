@@ -61,6 +61,8 @@ func newKinesisOutput(ctx unsafe.Pointer, pluginID int) (*kinesis.OutputPlugin, 
 	logrus.Infof("[kinesis %d] plugin parameter endpoint = '%s'", pluginID, endpoint)
 	appendNewline := output.FLBPluginConfigKey(ctx, "append_newline")
 	logrus.Infof("[kinesis %d] plugin parameter append_newline = %s", pluginID, appendNewline)
+	replaceDots := output.FLBPluginConfigKey(ctx, "replace_dots")
+	logrus.Infof("[kinesis %d] plugin parameter replace_dots = %s", pluginID, replaceDots)
 
 	if stream == "" || region == "" {
 		return nil, fmt.Errorf("[kinesis %d] stream and region are required configuration parameters", pluginID)
@@ -78,6 +80,12 @@ func newKinesisOutput(ctx unsafe.Pointer, pluginID int) (*kinesis.OutputPlugin, 
 	if strings.ToLower(appendNewline) == "true" {
 		appendNL = true
 	}
+
+	replaceDotsInKeys := false
+	if strings.ToLower(replaceDots) == "true" {
+		replaceDotsInKeys = true
+	}
+
 	return kinesis.NewOutputPlugin(region, stream, dataKeys, partitionKey, roleARN, endpoint, appendNL, pluginID)
 }
 

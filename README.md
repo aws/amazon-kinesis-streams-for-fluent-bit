@@ -15,6 +15,7 @@ If you think you’ve found a potential security issue, please do not post it in
 * `role_arn`: ARN of an IAM role to assume (for cross account access).
 * `endpoint`: Specify a custom endpoint for the Kinesis Streams API.
 * `append_newline`: If you set append_newline as true, a newline will be addded after each log record.
+* `replace_dots`: If you set replace_dots as true, all dots in key names will be replaced with underscores.
 
 ### Permissions
 
@@ -48,6 +49,7 @@ This plugin has been tested with Fluent Bit 1.2.0+. It may not work with older F
     stream          my-kinesis-stream-name
     partition_key   container_id
     append_newline  true
+    replace_dots    true
 ```
 
 ### AWS for Fluent Bit
