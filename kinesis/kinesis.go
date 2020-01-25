@@ -407,8 +407,6 @@ func (outputPlugin *OutputPlugin) FlushConcurrent(count int, records []*kinesis.
 }
 
 func replaceDots(obj map[interface{}]interface{}) map[interface{}]interface{} {
-	newObj := make(map[interface{}]interface{})
-
 	for k, v := range obj {
 		switch kt := k.(type) {
 		case string:
@@ -418,18 +416,12 @@ func replaceDots(obj map[interface{}]interface{}) map[interface{}]interface{} {
 		switch vt := v.(type) {
 		case map[interface{}]interface{}:
 			v = replaceDots(vt)
-			// Ensure duplicated keys are merged rather than replaced
-			if _, ok := newObj[k]; ok {
-				for nestedK, nestedV := range vt {
-					newObj[k].(map[interface{}]interface{})[nestedK] = nestedV
-				}
-			}
 		}
 
-		newObj[k] = v
+		obj[k] = v
 	}
 
-	return newObj
+	return obj
 }
 
 func (outputPlugin *OutputPlugin) processRecord(record map[interface{}]interface{}, partitionKey string) ([]byte, error) {
