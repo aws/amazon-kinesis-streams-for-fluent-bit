@@ -1,10 +1,10 @@
-// Copyright 2019 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+// Copyright 2019-2020 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License"). You may
 // not use this file except in compliance with the License. A copy of the
 // License is located at
 //
-//     http://aws.amazon.com/apache2.0/
+//      http://aws.amazon.com/apache2.0/
 //
 // or in the "license" file accompanying this file. This file is distributed
 // on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
@@ -18,10 +18,9 @@
 package mock_kinesis
 
 import (
-	reflect "reflect"
-
 	kinesis "github.com/aws/aws-sdk-go/service/kinesis"
 	gomock "github.com/golang/mock/gomock"
+	reflect "reflect"
 )
 
 // MockPutRecordsClient is a mock of PutRecordsClient interface
