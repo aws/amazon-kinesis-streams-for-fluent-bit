@@ -17,6 +17,7 @@ import (
 	"C"
 	"fmt"
 	"strings"
+	"time"
 	"unsafe"
 
 	"github.com/aws/amazon-kinesis-firehose-for-fluent-bit/plugins"
@@ -61,6 +62,10 @@ func newKinesisOutput(ctx unsafe.Pointer, pluginID int) (*kinesis.OutputPlugin, 
 	logrus.Infof("[kinesis %d] plugin parameter endpoint = '%s'", pluginID, endpoint)
 	appendNewline := output.FLBPluginConfigKey(ctx, "append_newline")
 	logrus.Infof("[kinesis %d] plugin parameter append_newline = %s", pluginID, appendNewline)
+	timeKey := output.FLBPluginConfigKey(ctx, "time_key")
+	logrus.Infof("[firehose %d] plugin parameter time_key = '%s'\n", pluginID, timeKey)
+	timeKeyFmt := output.FLBPluginConfigKey(ctx, "time_key_format")
+	logrus.Infof("[firehose %d] plugin parameter time_key_format = '%s'\n", pluginID, timeKeyFmt)
 
 	if stream == "" || region == "" {
 		return nil, fmt.Errorf("[kinesis %d] stream and region are required configuration parameters", pluginID)
@@ -78,7 +83,7 @@ func newKinesisOutput(ctx unsafe.Pointer, pluginID int) (*kinesis.OutputPlugin, 
 	if strings.ToLower(appendNewline) == "true" {
 		appendNL = true
 	}
-	return kinesis.NewOutputPlugin(region, stream, dataKeys, partitionKey, roleARN, endpoint, appendNL, pluginID)
+	return kinesis.NewOutputPlugin(region, stream, dataKeys, partitionKey, roleARN, endpoint, timeKey, timeKeyFmt, appendNL, pluginID)
 }
 
 // The "export" comments have syntactic meaning
@@ -104,6 +109,8 @@ func FLBPluginInit(ctx unsafe.Pointer) int {
 func FLBPluginFlushCtx(ctx, data unsafe.Pointer, length C.int, tag *C.char) int {
 	var count int
 	var ret int
+	var ts interface{}
+	var timestamp time.Time
 	var record map[interface{}]interface{}
 
 	// Create Fluent Bit decoder
@@ -115,12 +122,23 @@ func FLBPluginFlushCtx(ctx, data unsafe.Pointer, length C.int, tag *C.char) int 
 
 	for {
 		//Extract Record
-		ret, _, record = output.GetRecord(dec)
+		ret, ts, record = output.GetRecord(dec)
 		if ret != 0 {
 			break
 		}
 
-		retCode := kinesisOutput.AddRecord(record)
+		switch tts := ts.(type) {
+		case output.FLBTime:
+			timestamp = tts.Time
+		case uint64:
+			// when ts is of type uint64 it appears to
+			// be the amount of seconds since unix epoch.
+			timestamp = time.Unix(int64(tts), 0)
+		default:
+			timestamp = time.Now()
+		}
+
+		retCode := kinesisOutput.AddRecord(record, &timestamp)
 		if retCode != output.FLB_OK {
 			return retCode
 		}

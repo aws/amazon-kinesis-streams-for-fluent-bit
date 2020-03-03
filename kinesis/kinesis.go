@@ -17,6 +17,7 @@
 package kinesis
 
 import (
+	"bytes"
 	"fmt"
 	"math/rand"
 	"os"
@@ -31,6 +32,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/kinesis"
 	fluentbit "github.com/fluent/fluent-bit-go/output"
 	jsoniter "github.com/json-iterator/go"
+	"github.com/lestrrat-go/strftime"
 	"github.com/sirupsen/logrus"
 )
 
@@ -45,6 +47,11 @@ const (
 	maximumRecordSize         = 1024 * 1024     // 1 MB
 
 	partitionKeyMaxLength = 256
+)
+
+const (
+	// We use strftime format specifiers because this will one day be re-written in C
+	defaultTimeFmt = "%Y-%m-%dT%H:%M:%S"
 )
 
 // PutRecordsClient contains the kinesis PutRecords method call
@@ -69,6 +76,8 @@ type OutputPlugin struct {
 	partitionKey string
 	// Decides whether to append a newline after each data record
 	appendNewline                bool
+	timeKey                      string
+	fmtStrftime                  *strftime.Strftime
 	lastInvalidPartitionKeyIndex int
 	client                       PutRecordsClient
 	records                      []*kinesis.PutRecordsRequestEntry
@@ -80,7 +89,7 @@ type OutputPlugin struct {
 }
 
 // NewOutputPlugin creates an OutputPlugin object
-func NewOutputPlugin(region, stream, dataKeys, partitionKey, roleARN, endpoint string, appendNewline bool, pluginID int) (*OutputPlugin, error) {
+func NewOutputPlugin(region, stream, dataKeys, partitionKey, roleARN, endpoint, timeKey, timeFmt string, appendNewline bool, pluginID int) (*OutputPlugin, error) {
 	client, err := newPutRecordsClient(roleARN, region, endpoint)
 	if err != nil {
 		return nil, err
@@ -103,6 +112,18 @@ func NewOutputPlugin(region, stream, dataKeys, partitionKey, roleARN, endpoint s
 		buffer:       make([]byte, 8),
 	}
 
+	var timeFormatter *strftime.Strftime
+	if timeKey != "" {
+		if timeFmt == "" {
+			timeFmt = defaultTimeFmt
+		}
+		timeFormatter, err = strftime.New(timeFmt)
+		if err != nil {
+			logrus.Errorf("[kinesis %d] Issue with strftime format in 'time_key_format'", pluginID)
+			return nil, err
+		}
+	}
+
 	return &OutputPlugin{
 		stream:                       stream,
 		client:                       client,
@@ -110,6 +131,8 @@ func NewOutputPlugin(region, stream, dataKeys, partitionKey, roleARN, endpoint s
 		dataKeys:                     dataKeys,
 		partitionKey:                 partitionKey,
 		appendNewline:                appendNewline,
+		timeKey:                      timeKey,
+		fmtStrftime:                  timeFormatter,
 		lastInvalidPartitionKeyIndex: -1,
 		backoff:                      plugins.NewBackoff(),
 		timer:                        timer,
@@ -154,7 +177,17 @@ func newPutRecordsClient(roleARN string, awsRegion string, endpoint string) (*ki
 // AddRecord accepts a record and adds it to the buffer, flushing the buffer if it is full
 // the return value is one of: FLB_OK FLB_RETRY
 // API Errors lead to an FLB_RETRY, and data processing errors are logged, the record is discarded and FLB_OK is returned
-func (outputPlugin *OutputPlugin) AddRecord(record map[interface{}]interface{}) int {
+func (outputPlugin *OutputPlugin) AddRecord(record map[interface{}]interface{}, timeStamp *time.Time) int {
+	if outputPlugin.timeKey != "" {
+		buf := new(bytes.Buffer)
+		err := outputPlugin.fmtStrftime.Format(buf, *timeStamp)
+		if err != nil {
+			logrus.Errorf("[kinesis %d] Could not create timestamp %v\n", outputPlugin.PluginID, err)
+			return fluentbit.FLB_ERROR
+		}
+		record[outputPlugin.timeKey] = buf.String()
+	}
+
 	data, err := outputPlugin.processRecord(record)
 	if err != nil {
 		logrus.Errorf("[kinesis %d] %v\n", outputPlugin.PluginID, err)

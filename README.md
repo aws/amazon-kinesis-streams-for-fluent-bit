@@ -15,6 +15,8 @@ If you think you’ve found a potential security issue, please do not post it in
 * `role_arn`: ARN of an IAM role to assume (for cross account access).
 * `endpoint`: Specify a custom endpoint for the Kinesis Streams API.
 * `append_newline`: If you set append_newline as true, a newline will be addded after each log record.
+* `time_key`: Add the timestamp to the record under this key. By default the timestamp from Fluent Bit will not be added to records sent to Kinesis.
+* `time_key_format`: [strftime](http://man7.org/linux/man-pages/man3/strftime.3.html) compliant format string for the timestamp; for example, `%Y-%m-%dT%H:%M:%S%z`. This option is used with `time_key`. 
 
 ### Permissions
 
