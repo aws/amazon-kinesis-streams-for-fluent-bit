@@ -43,7 +43,7 @@ const (
 const (
 	// Kinesis API Limit https://docs.aws.amazon.com/sdk-for-go/api/service/kinesis/#Kinesis.PutRecords
 	maximumRecordsPerPut      = 500
-	maximumPutRecordBatchSize = 1024 * 1024 * 5 // 5 MB
+	maximumPutRecordBatchSize = 1024 * 1024 * 5 - partitionKeyMaxLength // 5 MB
 	maximumRecordSize         = 1024 * 1024     // 1 MB
 
 	partitionKeyMaxLength = 256
