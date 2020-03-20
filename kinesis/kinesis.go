@@ -188,16 +188,17 @@ func (outputPlugin *OutputPlugin) AddRecord(record map[interface{}]interface{}, 
 		record[outputPlugin.timeKey] = buf.String()
 	}
 
-	data, err := outputPlugin.processRecord(record)
+	partitionKey := outputPlugin.getPartitionKey(record)
+	data, err := outputPlugin.processRecord(record, partitionKey)
 	if err != nil {
 		logrus.Errorf("[kinesis %d] %v\n", outputPlugin.PluginID, err)
 		// discard this single bad record instead and let the batch continue
 		return fluentbit.FLB_OK
 	}
 
-	newDataSize := len(data)
+	newRecordSize := len(data) + len(partitionKey)
 
-	if len(outputPlugin.records) == maximumRecordsPerPut || (outputPlugin.dataLength+newDataSize) > maximumPutRecordBatchSize {
+	if len(outputPlugin.records) == maximumRecordsPerPut || (outputPlugin.dataLength+newRecordSize) > maximumPutRecordBatchSize {
 		err = outputPlugin.sendCurrentBatch()
 		if err != nil {
 			logrus.Errorf("[kinesis %d] %v\n", outputPlugin.PluginID, err)
@@ -206,12 +207,11 @@ func (outputPlugin *OutputPlugin) AddRecord(record map[interface{}]interface{}, 
 		}
 	}
 
-	partitionKey := outputPlugin.getPartitionKey(record)
 	outputPlugin.records = append(outputPlugin.records, &kinesis.PutRecordsRequestEntry{
 		Data:         data,
 		PartitionKey: aws.String(partitionKey),
 	})
-	outputPlugin.dataLength += newDataSize
+	outputPlugin.dataLength += newRecordSize
 	return fluentbit.FLB_OK
 }
 
@@ -220,7 +220,7 @@ func (outputPlugin *OutputPlugin) Flush() error {
 	return outputPlugin.sendCurrentBatch()
 }
 
-func (outputPlugin *OutputPlugin) processRecord(record map[interface{}]interface{}) ([]byte, error) {
+func (outputPlugin *OutputPlugin) processRecord(record map[interface{}]interface{}, partitionKey string) ([]byte, error) {
 	if outputPlugin.dataKeys != "" {
 		record = plugins.DataKeys(outputPlugin.dataKeys, record)
 	}
@@ -244,7 +244,7 @@ func (outputPlugin *OutputPlugin) processRecord(record map[interface{}]interface
 		data = append(data, []byte("\n")...)
 	}
 
-	if len(data) > maximumRecordSize {
+	if len(data)+len(partitionKey) > maximumRecordSize {
 		return nil, fmt.Errorf("Log record greater than max size allowed by Kinesis")
 	}
 
@@ -346,7 +346,7 @@ func (outputPlugin *OutputPlugin) getPartitionKey(record map[interface{}]interfa
 				}
 			}
 		}
-		outputPlugin.lastInvalidPartitionKeyIndex = len(outputPlugin.records)
+		outputPlugin.lastInvalidPartitionKeyIndex = len(outputPlugin.records) % maximumRecordsPerPut
 	}
 	return outputPlugin.randomString()
 }
