@@ -188,7 +188,8 @@ func (outputPlugin *OutputPlugin) AddRecord(record map[interface{}]interface{}, 
 		record[outputPlugin.timeKey] = buf.String()
 	}
 
-	data, err := outputPlugin.processRecord(record)
+	partitionKey := outputPlugin.getPartitionKey(record)
+	data, err := outputPlugin.processRecord(record, partitionKey)
 	if err != nil {
 		logrus.Errorf("[kinesis %d] %v\n", outputPlugin.PluginID, err)
 		// discard this single bad record instead and let the batch continue
@@ -196,7 +197,6 @@ func (outputPlugin *OutputPlugin) AddRecord(record map[interface{}]interface{}, 
 	}
 
 	newDataSize := len(data)
-	partitionKey := outputPlugin.getPartitionKey(record)
 
 	if len(outputPlugin.records) == maximumRecordsPerPut || (outputPlugin.dataLength+newDataSize+len(partitionKey)) > maximumPutRecordBatchSize {
 		err = outputPlugin.sendCurrentBatch()
@@ -220,7 +220,7 @@ func (outputPlugin *OutputPlugin) Flush() error {
 	return outputPlugin.sendCurrentBatch()
 }
 
-func (outputPlugin *OutputPlugin) processRecord(record map[interface{}]interface{}) ([]byte, error) {
+func (outputPlugin *OutputPlugin) processRecord(record map[interface{}]interface{}, partitionKey string) ([]byte, error) {
 	if outputPlugin.dataKeys != "" {
 		record = plugins.DataKeys(outputPlugin.dataKeys, record)
 	}
@@ -244,7 +244,7 @@ func (outputPlugin *OutputPlugin) processRecord(record map[interface{}]interface
 		data = append(data, []byte("\n")...)
 	}
 
-	if len(data) > maximumRecordSize {
+	if len(data)+len(partitionKey) > maximumRecordSize {
 		return nil, fmt.Errorf("Log record greater than max size allowed by Kinesis")
 	}
 
