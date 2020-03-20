@@ -196,9 +196,9 @@ func (outputPlugin *OutputPlugin) AddRecord(record map[interface{}]interface{}, 
 		return fluentbit.FLB_OK
 	}
 
-	newDataSize := len(data)
+	newRecordSize := len(data) + len(partitionKey)
 
-	if len(outputPlugin.records) == maximumRecordsPerPut || (outputPlugin.dataLength+newDataSize+len(partitionKey)) > maximumPutRecordBatchSize {
+	if len(outputPlugin.records) == maximumRecordsPerPut || (outputPlugin.dataLength+newRecordSize) > maximumPutRecordBatchSize {
 		err = outputPlugin.sendCurrentBatch()
 		if err != nil {
 			logrus.Errorf("[kinesis %d] %v\n", outputPlugin.PluginID, err)
@@ -211,7 +211,7 @@ func (outputPlugin *OutputPlugin) AddRecord(record map[interface{}]interface{}, 
 		Data:         data,
 		PartitionKey: aws.String(partitionKey),
 	})
-	outputPlugin.dataLength += (newDataSize + len(partitionKey))
+	outputPlugin.dataLength += newRecordSize
 	return fluentbit.FLB_OK
 }
 
