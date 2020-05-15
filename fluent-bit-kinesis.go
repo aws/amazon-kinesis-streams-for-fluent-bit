@@ -144,10 +144,9 @@ func FLBPluginFlushCtx(ctx, data unsafe.Pointer, length C.int, tag *C.char) int 
 		}
 		count++
 	}
-	err := kinesisOutput.Flush()
-	if err != nil {
-		logrus.Errorf("[kinesis %d] %v\n", kinesisOutput.PluginID, err)
-		return output.FLB_ERROR
+	retCode := kinesisOutput.Flush()
+	if retCode != output.FLB_OK {
+		return retCode
 	}
 	logrus.Debugf("[kinesis %d] Processed %d events with tag %s\n", kinesisOutput.PluginID, count, fluentTag)
 
@@ -158,10 +157,7 @@ func FLBPluginFlushCtx(ctx, data unsafe.Pointer, length C.int, tag *C.char) int 
 func FLBPluginExit() int {
 	// Before final exit, call Flush() for all the instances of the Output Plugin
 	for i := range pluginInstances {
-		err := pluginInstances[i].Flush()
-		if err != nil {
-			logrus.Errorf("[kinesis %d] %v\n", pluginInstances[i].PluginID, err)
-		}
+		pluginInstances[i].Flush()
 	}
 
 	return output.FLB_OK
