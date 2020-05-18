@@ -22,8 +22,14 @@ import (
 
 	"github.com/aws/amazon-kinesis-firehose-for-fluent-bit/plugins"
 	"github.com/aws/amazon-kinesis-streams-for-fluent-bit/kinesis"
+	kinesisAPI "github.com/aws/aws-sdk-go/service/kinesis"
 	"github.com/fluent/fluent-bit-go/output"
 	"github.com/sirupsen/logrus"
+)
+
+const (
+	// Kinesis API Limit https://docs.aws.amazon.com/sdk-for-go/api/service/kinesis/#Kinesis.PutRecords
+	maximumRecordsPerPut = 500
 )
 
 var (
@@ -107,6 +113,11 @@ func FLBPluginInit(ctx unsafe.Pointer) int {
 
 //export FLBPluginFlushCtx
 func FLBPluginFlushCtx(ctx, data unsafe.Pointer, length C.int, tag *C.char) int {
+	go pluginConcurrentFlush(ctx, data, length, tag)
+	return output.FLB_OK
+}
+
+func pluginConcurrentFlush(ctx, data unsafe.Pointer, length C.int, tag *C.char) int {
 	var count int
 	var ret int
 	var ts interface{}
@@ -119,6 +130,9 @@ func FLBPluginFlushCtx(ctx, data unsafe.Pointer, length C.int, tag *C.char) int 
 	kinesisOutput := getPluginInstance(ctx)
 	fluentTag := C.GoString(tag)
 	logrus.Debugf("[kinesis %d] Found logs with tag: %s\n", kinesisOutput.PluginID, fluentTag)
+
+	// Each flush must have its own output buffer, since flushes can be concurrent
+	records := make([]*kinesisAPI.PutRecordsRequestEntry, 0, maximumRecordsPerPut)
 
 	for {
 		//Extract Record
@@ -138,13 +152,13 @@ func FLBPluginFlushCtx(ctx, data unsafe.Pointer, length C.int, tag *C.char) int 
 			timestamp = time.Now()
 		}
 
-		retCode := kinesisOutput.AddRecord(record, &timestamp)
+		retCode := kinesisOutput.AddRecord(records, record, &timestamp)
 		if retCode != output.FLB_OK {
 			return retCode
 		}
 		count++
 	}
-	retCode := kinesisOutput.Flush()
+	retCode := kinesisOutput.Flush(records)
 	if retCode != output.FLB_OK {
 		return retCode
 	}
@@ -155,9 +169,10 @@ func FLBPluginFlushCtx(ctx, data unsafe.Pointer, length C.int, tag *C.char) int 
 
 //export FLBPluginExit
 func FLBPluginExit() int {
+	records := make([]*kinesisAPI.PutRecordsRequestEntry, 0, maximumRecordsPerPut)
 	// Before final exit, call Flush() for all the instances of the Output Plugin
 	for i := range pluginInstances {
-		pluginInstances[i].Flush()
+		pluginInstances[i].Flush(records)
 	}
 
 	return output.FLB_OK

@@ -80,7 +80,6 @@ type OutputPlugin struct {
 	fmtStrftime                  *strftime.Strftime
 	lastInvalidPartitionKeyIndex int
 	client                       PutRecordsClient
-	records                      []*kinesis.PutRecordsRequestEntry
 	dataLength                   int
 	timer                        *plugins.Timeout
 	PluginID                     int
@@ -94,7 +93,6 @@ func NewOutputPlugin(region, stream, dataKeys, partitionKey, roleARN, endpoint, 
 		return nil, err
 	}
 
-	records := make([]*kinesis.PutRecordsRequestEntry, 0, maximumRecordsPerPut)
 	timer, err := plugins.NewTimeout(func(d time.Duration) {
 		logrus.Errorf("[kinesis %d] timeout threshold reached: Failed to send logs for %s\n", pluginID, d.String())
 		logrus.Errorf("[kinesis %d] Quitting Fluent Bit", pluginID)
@@ -126,7 +124,6 @@ func NewOutputPlugin(region, stream, dataKeys, partitionKey, roleARN, endpoint, 
 	return &OutputPlugin{
 		stream:                       stream,
 		client:                       client,
-		records:                      records,
 		dataKeys:                     dataKeys,
 		partitionKey:                 partitionKey,
 		appendNewline:                appendNewline,
@@ -175,7 +172,7 @@ func newPutRecordsClient(roleARN string, awsRegion string, endpoint string) (*ki
 // AddRecord accepts a record and adds it to the buffer, flushing the buffer if it is full
 // the return value is one of: FLB_OK FLB_RETRY
 // API Errors lead to an FLB_RETRY, and data processing errors are logged, the record is discarded and FLB_OK is returned
-func (outputPlugin *OutputPlugin) AddRecord(record map[interface{}]interface{}, timeStamp *time.Time) int {
+func (outputPlugin *OutputPlugin) AddRecord(records []*kinesis.PutRecordsRequestEntry, record map[interface{}]interface{}, timeStamp *time.Time) int {
 	if outputPlugin.timeKey != "" {
 		buf := new(bytes.Buffer)
 		err := outputPlugin.fmtStrftime.Format(buf, *timeStamp)
@@ -186,7 +183,7 @@ func (outputPlugin *OutputPlugin) AddRecord(record map[interface{}]interface{}, 
 		record[outputPlugin.timeKey] = buf.String()
 	}
 
-	partitionKey := outputPlugin.getPartitionKey(record)
+	partitionKey := outputPlugin.getPartitionKey(records, record)
 	data, err := outputPlugin.processRecord(record, partitionKey)
 	if err != nil {
 		logrus.Errorf("[kinesis %d] %v\n", outputPlugin.PluginID, err)
@@ -196,15 +193,15 @@ func (outputPlugin *OutputPlugin) AddRecord(record map[interface{}]interface{}, 
 
 	newRecordSize := len(data) + len(partitionKey)
 
-	if len(outputPlugin.records) == maximumRecordsPerPut || (outputPlugin.dataLength+newRecordSize) > maximumPutRecordBatchSize {
-		retCode, err := outputPlugin.sendCurrentBatch()
+	if len(records) == maximumRecordsPerPut || (outputPlugin.dataLength+newRecordSize) > maximumPutRecordBatchSize {
+		retCode, err := outputPlugin.sendCurrentBatch(records)
 		if err != nil {
 			logrus.Errorf("[kinesis %d] %v\n", outputPlugin.PluginID, err)
 		}
 		return retCode
 	}
 
-	outputPlugin.records = append(outputPlugin.records, &kinesis.PutRecordsRequestEntry{
+	records = append(records, &kinesis.PutRecordsRequestEntry{
 		Data:         data,
 		PartitionKey: aws.String(partitionKey),
 	})
@@ -214,8 +211,8 @@ func (outputPlugin *OutputPlugin) AddRecord(record map[interface{}]interface{}, 
 
 // Flush sends the current buffer of log records
 // Returns FLB_OK, FLB_RETRY, FLB_ERROR
-func (outputPlugin *OutputPlugin) Flush() int {
-	retCode, err := outputPlugin.sendCurrentBatch()
+func (outputPlugin *OutputPlugin) Flush(records []*kinesis.PutRecordsRequestEntry) int {
+	retCode, err := outputPlugin.sendCurrentBatch(records)
 	if err != nil {
 		logrus.Errorf("[kinesis %d] %v\n", outputPlugin.PluginID, err)
 	}
@@ -253,15 +250,15 @@ func (outputPlugin *OutputPlugin) processRecord(record map[interface{}]interface
 	return data, nil
 }
 
-func (outputPlugin *OutputPlugin) sendCurrentBatch() (int, error) {
+func (outputPlugin *OutputPlugin) sendCurrentBatch(records []*kinesis.PutRecordsRequestEntry) (int, error) {
 	if outputPlugin.lastInvalidPartitionKeyIndex >= 0 {
-		logrus.Errorf("[kinesis %d] Invalid partition key. Failed to find partition_key %s in log record %s", outputPlugin.PluginID, outputPlugin.partitionKey, outputPlugin.records[outputPlugin.lastInvalidPartitionKeyIndex].Data)
+		logrus.Errorf("[kinesis %d] Invalid partition key. Failed to find partition_key %s in log record %s", outputPlugin.PluginID, outputPlugin.partitionKey, records[outputPlugin.lastInvalidPartitionKeyIndex].Data)
 		outputPlugin.lastInvalidPartitionKeyIndex = -1
 	}
 	outputPlugin.timer.Check()
 
 	response, err := outputPlugin.client.PutRecords(&kinesis.PutRecordsInput{
-		Records:    outputPlugin.records,
+		Records:    records,
 		StreamName: aws.String(outputPlugin.stream),
 	})
 	if err != nil {
@@ -274,17 +271,17 @@ func (outputPlugin *OutputPlugin) sendCurrentBatch() (int, error) {
 		}
 		return fluentbit.FLB_RETRY, err
 	}
-	logrus.Debugf("[kinesis %d] Sent %d events to Kinesis\n", outputPlugin.PluginID, len(outputPlugin.records))
+	logrus.Debugf("[kinesis %d] Sent %d events to Kinesis\n", outputPlugin.PluginID, len(records))
 
-	return outputPlugin.processAPIResponse(response)
+	return outputPlugin.processAPIResponse(records, response)
 }
 
 // processAPIResponse processes the successful and failed records
 // it returns an error iff no records succeeded (i.e.) no progress has been made
-func (outputPlugin *OutputPlugin) processAPIResponse(response *kinesis.PutRecordsOutput) (int, error) {
+func (outputPlugin *OutputPlugin) processAPIResponse(records []*kinesis.PutRecordsRequestEntry, response *kinesis.PutRecordsOutput) (int, error) {
 	if aws.Int64Value(response.FailedRecordCount) > 0 {
 		// start timer if all records failed (no progress has been made)
-		if aws.Int64Value(response.FailedRecordCount) == int64(len(outputPlugin.records)) {
+		if aws.Int64Value(response.FailedRecordCount) == int64(len(records)) {
 			outputPlugin.timer.Start()
 			return fluentbit.FLB_RETRY, fmt.Errorf("PutRecords request returned with no records successfully recieved")
 		}
@@ -295,7 +292,7 @@ func (outputPlugin *OutputPlugin) processAPIResponse(response *kinesis.PutRecord
 		for i, record := range response.Records {
 			if record.ErrorMessage != nil {
 				logrus.Debugf("[kinesis %d] Record failed to send with error: %s\n", outputPlugin.PluginID, aws.StringValue(record.ErrorMessage))
-				failedRecords = append(failedRecords, outputPlugin.records[i])
+				failedRecords = append(failedRecords, records[i])
 			}
 			if aws.StringValue(record.ErrorCode) == kinesis.ErrCodeProvisionedThroughputExceededException {
 				logrus.Warnf("[kinesis %d] Throughput limits for the stream may have been exceeded.", outputPlugin.PluginID)
@@ -303,16 +300,16 @@ func (outputPlugin *OutputPlugin) processAPIResponse(response *kinesis.PutRecord
 			}
 		}
 
-		outputPlugin.records = outputPlugin.records[:0]
-		outputPlugin.records = append(outputPlugin.records, failedRecords...)
+		records = records[:0]
+		records = append(records, failedRecords...)
 		outputPlugin.dataLength = 0
-		for _, record := range outputPlugin.records {
+		for _, record := range records {
 			outputPlugin.dataLength += len(record.Data)
 		}
 	} else {
 		// request fully succeeded
 		outputPlugin.timer.Reset()
-		outputPlugin.records = outputPlugin.records[:0]
+		records = records[:0]
 		outputPlugin.dataLength = 0
 	}
 	return fluentbit.FLB_OK, nil
@@ -329,7 +326,7 @@ func (outputPlugin *OutputPlugin) randomString() string {
 
 // getPartitionKey returns the value for a given valid key
 // if the given key is emapty or invalid, it returns a random string
-func (outputPlugin *OutputPlugin) getPartitionKey(record map[interface{}]interface{}) string {
+func (outputPlugin *OutputPlugin) getPartitionKey(records []*kinesis.PutRecordsRequestEntry, record map[interface{}]interface{}) string {
 	partitionKey := outputPlugin.partitionKey
 	if partitionKey != "" {
 		for k, v := range record {
@@ -344,7 +341,7 @@ func (outputPlugin *OutputPlugin) getPartitionKey(record map[interface{}]interfa
 				}
 			}
 		}
-		outputPlugin.lastInvalidPartitionKeyIndex = len(outputPlugin.records) % maximumRecordsPerPut
+		outputPlugin.lastInvalidPartitionKeyIndex = len(records) % maximumRecordsPerPut
 	}
 	return outputPlugin.randomString()
 }
