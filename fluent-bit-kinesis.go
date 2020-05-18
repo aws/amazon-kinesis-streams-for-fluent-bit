@@ -182,11 +182,10 @@ func pluginConcurrentFlush(ctx, data unsafe.Pointer, length C.int, tag *C.char) 
 
 //export FLBPluginExit
 func FLBPluginExit() int {
-	records := make([]*kinesisAPI.PutRecordsRequestEntry, 0, maximumRecordsPerPut)
 	// Before final exit, call Flush() for all the instances of the Output Plugin
-	for i := range pluginInstances {
-		pluginInstances[i].Flush(records)
-	}
+	// for i := range pluginInstances {
+	// 	pluginInstances[i].Flush(records)
+	// }
 
 	return output.FLB_OK
 }
