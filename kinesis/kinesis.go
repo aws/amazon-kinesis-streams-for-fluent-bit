@@ -197,8 +197,8 @@ func (outputPlugin *OutputPlugin) AddRecord(records *[]*kinesis.PutRecordsReques
 		retCode, err := outputPlugin.sendCurrentBatch(records)
 		if err != nil {
 			logrus.Errorf("[kinesis %d] %v\n", outputPlugin.PluginID, err)
+			return retCode
 		}
-		return retCode
 	}
 
 	*records = append(*records, &kinesis.PutRecordsRequestEntry{
