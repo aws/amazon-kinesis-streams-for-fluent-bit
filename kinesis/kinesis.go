@@ -251,7 +251,12 @@ func (outputPlugin *OutputPlugin) processRecord(record map[interface{}]interface
 }
 
 func (outputPlugin *OutputPlugin) sendCurrentBatch(records []*kinesis.PutRecordsRequestEntry) (int, error) {
+	if len(records) == 0 {
+		return fluentbit.FLB_OK, nil
+	}
 	if outputPlugin.lastInvalidPartitionKeyIndex >= 0 {
+		logrus.Infof("lastInvalidPartitionKeyIndex: %d\n", outputPlugin.lastInvalidPartitionKeyIndex)
+		logrus.Infof("len(records): %d\n", len(records))
 		logrus.Errorf("[kinesis %d] Invalid partition key. Failed to find partition_key %s in log record %s", outputPlugin.PluginID, outputPlugin.partitionKey, records[outputPlugin.lastInvalidPartitionKeyIndex].Data)
 		outputPlugin.lastInvalidPartitionKeyIndex = -1
 	}
