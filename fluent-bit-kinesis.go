@@ -165,13 +165,13 @@ func pluginConcurrentFlush(ctx, data unsafe.Pointer, length C.int, tag *C.char) 
 			timestamp = time.Now()
 		}
 
-		retCode := kinesisOutput.AddRecord(records, record, &timestamp)
+		retCode := kinesisOutput.AddRecord(&records, record, &timestamp)
 		if retCode != output.FLB_OK {
 			return retCode
 		}
 		count++
 	}
-	retCode := kinesisOutput.Flush(records)
+	retCode := kinesisOutput.Flush(&records)
 	if retCode != output.FLB_OK {
 		return retCode
 	}

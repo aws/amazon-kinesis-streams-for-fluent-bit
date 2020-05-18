@@ -172,7 +172,7 @@ func newPutRecordsClient(roleARN string, awsRegion string, endpoint string) (*ki
 // AddRecord accepts a record and adds it to the buffer, flushing the buffer if it is full
 // the return value is one of: FLB_OK FLB_RETRY
 // API Errors lead to an FLB_RETRY, and data processing errors are logged, the record is discarded and FLB_OK is returned
-func (outputPlugin *OutputPlugin) AddRecord(records []*kinesis.PutRecordsRequestEntry, record map[interface{}]interface{}, timeStamp *time.Time) int {
+func (outputPlugin *OutputPlugin) AddRecord(records *[]*kinesis.PutRecordsRequestEntry, record map[interface{}]interface{}, timeStamp *time.Time) int {
 	if outputPlugin.timeKey != "" {
 		buf := new(bytes.Buffer)
 		err := outputPlugin.fmtStrftime.Format(buf, *timeStamp)
@@ -183,7 +183,7 @@ func (outputPlugin *OutputPlugin) AddRecord(records []*kinesis.PutRecordsRequest
 		record[outputPlugin.timeKey] = buf.String()
 	}
 
-	partitionKey := outputPlugin.getPartitionKey(records, record)
+	partitionKey := outputPlugin.getPartitionKey(*records, record)
 	data, err := outputPlugin.processRecord(record, partitionKey)
 	if err != nil {
 		logrus.Errorf("[kinesis %d] %v\n", outputPlugin.PluginID, err)
@@ -193,7 +193,7 @@ func (outputPlugin *OutputPlugin) AddRecord(records []*kinesis.PutRecordsRequest
 
 	newRecordSize := len(data) + len(partitionKey)
 
-	if len(records) == maximumRecordsPerPut || (outputPlugin.dataLength+newRecordSize) > maximumPutRecordBatchSize {
+	if len(*records) == maximumRecordsPerPut || (outputPlugin.dataLength+newRecordSize) > maximumPutRecordBatchSize {
 		retCode, err := outputPlugin.sendCurrentBatch(records)
 		if err != nil {
 			logrus.Errorf("[kinesis %d] %v\n", outputPlugin.PluginID, err)
@@ -201,7 +201,7 @@ func (outputPlugin *OutputPlugin) AddRecord(records []*kinesis.PutRecordsRequest
 		return retCode
 	}
 
-	records = append(records, &kinesis.PutRecordsRequestEntry{
+	*records = append(*records, &kinesis.PutRecordsRequestEntry{
 		Data:         data,
 		PartitionKey: aws.String(partitionKey),
 	})
@@ -211,7 +211,7 @@ func (outputPlugin *OutputPlugin) AddRecord(records []*kinesis.PutRecordsRequest
 
 // Flush sends the current buffer of log records
 // Returns FLB_OK, FLB_RETRY, FLB_ERROR
-func (outputPlugin *OutputPlugin) Flush(records []*kinesis.PutRecordsRequestEntry) int {
+func (outputPlugin *OutputPlugin) Flush(records *[]*kinesis.PutRecordsRequestEntry) int {
 	retCode, err := outputPlugin.sendCurrentBatch(records)
 	if err != nil {
 		logrus.Errorf("[kinesis %d] %v\n", outputPlugin.PluginID, err)
@@ -250,22 +250,22 @@ func (outputPlugin *OutputPlugin) processRecord(record map[interface{}]interface
 	return data, nil
 }
 
-func (outputPlugin *OutputPlugin) sendCurrentBatch(records []*kinesis.PutRecordsRequestEntry) (int, error) {
-	if len(records) == 0 {
+func (outputPlugin *OutputPlugin) sendCurrentBatch(records *[]*kinesis.PutRecordsRequestEntry) (int, error) {
+	if len(*records) == 0 {
 		logrus.Info("No records")
 		return fluentbit.FLB_OK, nil
 	}
-	if outputPlugin.lastInvalidPartitionKeyIndex >= 0 && outputPlugin.lastInvalidPartitionKeyIndex <= len(records) {
-		logrus.Errorf("[kinesis %d] Invalid partition key. Failed to find partition_key %s in log record %s", outputPlugin.PluginID, outputPlugin.partitionKey, records[outputPlugin.lastInvalidPartitionKeyIndex].Data)
+	if outputPlugin.lastInvalidPartitionKeyIndex >= 0 && outputPlugin.lastInvalidPartitionKeyIndex <= len(*records) {
+		logrus.Errorf("[kinesis %d] Invalid partition key. Failed to find partition_key %s in log record %s", outputPlugin.PluginID, outputPlugin.partitionKey, (*records)[outputPlugin.lastInvalidPartitionKeyIndex].Data)
 		outputPlugin.lastInvalidPartitionKeyIndex = -1
 	}
 	outputPlugin.timer.Check()
-	logrus.Infof("About to send %d records to %s", len(records), outputPlugin.stream)
+	logrus.Infof("About to send %d records to %s", len(*records), outputPlugin.stream)
 	response, err := outputPlugin.client.PutRecords(&kinesis.PutRecordsInput{
-		Records:    records,
+		Records:    *records,
 		StreamName: aws.String(outputPlugin.stream),
 	})
-	logrus.Infof("Tried to send %d records", len(records))
+	logrus.Infof("Tried to send %d records", len(*records))
 	if err != nil {
 		logrus.Errorf("[kinesis %d] PutRecords failed with %v\n", outputPlugin.PluginID, err)
 		outputPlugin.timer.Start()
@@ -276,17 +276,17 @@ func (outputPlugin *OutputPlugin) sendCurrentBatch(records []*kinesis.PutRecords
 		}
 		return fluentbit.FLB_RETRY, err
 	}
-	logrus.Debugf("[kinesis %d] Sent %d events to Kinesis\n", outputPlugin.PluginID, len(records))
+	logrus.Debugf("[kinesis %d] Sent %d events to Kinesis\n", outputPlugin.PluginID, len(*records))
 
 	return outputPlugin.processAPIResponse(records, response)
 }
 
 // processAPIResponse processes the successful and failed records
 // it returns an error iff no records succeeded (i.e.) no progress has been made
-func (outputPlugin *OutputPlugin) processAPIResponse(records []*kinesis.PutRecordsRequestEntry, response *kinesis.PutRecordsOutput) (int, error) {
+func (outputPlugin *OutputPlugin) processAPIResponse(records *[]*kinesis.PutRecordsRequestEntry, response *kinesis.PutRecordsOutput) (int, error) {
 	if aws.Int64Value(response.FailedRecordCount) > 0 {
 		// start timer if all records failed (no progress has been made)
-		if aws.Int64Value(response.FailedRecordCount) == int64(len(records)) {
+		if aws.Int64Value(response.FailedRecordCount) == int64(len(*records)) {
 			outputPlugin.timer.Start()
 			return fluentbit.FLB_RETRY, fmt.Errorf("PutRecords request returned with no records successfully recieved")
 		}
@@ -297,7 +297,7 @@ func (outputPlugin *OutputPlugin) processAPIResponse(records []*kinesis.PutRecor
 		for i, record := range response.Records {
 			if record.ErrorMessage != nil {
 				logrus.Debugf("[kinesis %d] Record failed to send with error: %s\n", outputPlugin.PluginID, aws.StringValue(record.ErrorMessage))
-				failedRecords = append(failedRecords, records[i])
+				failedRecords = append(failedRecords, (*records)[i])
 			}
 			if aws.StringValue(record.ErrorCode) == kinesis.ErrCodeProvisionedThroughputExceededException {
 				logrus.Warnf("[kinesis %d] Throughput limits for the stream may have been exceeded.", outputPlugin.PluginID)
@@ -305,16 +305,16 @@ func (outputPlugin *OutputPlugin) processAPIResponse(records []*kinesis.PutRecor
 			}
 		}
 
-		records = records[:0]
-		records = append(records, failedRecords...)
+		*records = (*records)[:0]
+		*records = append(*records, failedRecords...)
 		outputPlugin.dataLength = 0
-		for _, record := range records {
+		for _, record := range *records {
 			outputPlugin.dataLength += len(record.Data)
 		}
 	} else {
 		// request fully succeeded
 		outputPlugin.timer.Reset()
-		records = records[:0]
+		*records = (*records)[:0]
 		outputPlugin.dataLength = 0
 	}
 	return fluentbit.FLB_OK, nil
