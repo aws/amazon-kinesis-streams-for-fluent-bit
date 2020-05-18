@@ -252,6 +252,7 @@ func (outputPlugin *OutputPlugin) processRecord(record map[interface{}]interface
 
 func (outputPlugin *OutputPlugin) sendCurrentBatch(records []*kinesis.PutRecordsRequestEntry) (int, error) {
 	if len(records) == 0 {
+		logrus.Info("No records")
 		return fluentbit.FLB_OK, nil
 	}
 	if outputPlugin.lastInvalidPartitionKeyIndex >= 0 && outputPlugin.lastInvalidPartitionKeyIndex <= len(records) {
@@ -264,7 +265,7 @@ func (outputPlugin *OutputPlugin) sendCurrentBatch(records []*kinesis.PutRecords
 		Records:    records,
 		StreamName: aws.String(outputPlugin.stream),
 	})
-	logrus.Infof("Tried send %d records", len(records))
+	logrus.Infof("Tried to send %d records", len(records))
 	if err != nil {
 		logrus.Errorf("[kinesis %d] PutRecords failed with %v\n", outputPlugin.PluginID, err)
 		outputPlugin.timer.Start()
