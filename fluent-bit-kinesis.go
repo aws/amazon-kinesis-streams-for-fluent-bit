@@ -32,6 +32,10 @@ const (
 	maximumRecordsPerPut = 500
 )
 
+const (
+	retries = 2
+)
+
 var (
 	pluginInstances []*kinesis.OutputPlugin
 )
@@ -113,8 +117,17 @@ func FLBPluginInit(ctx unsafe.Pointer) int {
 
 //export FLBPluginFlushCtx
 func FLBPluginFlushCtx(ctx, data unsafe.Pointer, length C.int, tag *C.char) int {
-	go pluginConcurrentFlush(ctx, data, length, tag)
+	go flushWithRetries(ctx, data, length, tag, retries)
 	return output.FLB_OK
+}
+
+func flushWithRetries(ctx, data unsafe.Pointer, length C.int, tag *C.char, retries int) {
+	for i := 0; i < retries; i++ {
+		retCode := pluginConcurrentFlush(ctx, data, length, tag)
+		if retCode != output.FLB_RETRY {
+			break
+		}
+	}
 }
 
 func pluginConcurrentFlush(ctx, data unsafe.Pointer, length C.int, tag *C.char) int {
