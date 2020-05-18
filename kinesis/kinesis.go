@@ -200,8 +200,8 @@ func (outputPlugin *OutputPlugin) AddRecord(record map[interface{}]interface{}, 
 		retCode, err := outputPlugin.sendCurrentBatch()
 		if err != nil {
 			logrus.Errorf("[kinesis %d] %v\n", outputPlugin.PluginID, err)
+			return retCode
 		}
-		return retCode
 	}
 
 	outputPlugin.records = append(outputPlugin.records, &kinesis.PutRecordsRequestEntry{
