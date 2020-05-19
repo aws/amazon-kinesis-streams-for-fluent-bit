@@ -117,29 +117,29 @@ func FLBPluginInit(ctx unsafe.Pointer) int {
 
 //export FLBPluginFlushCtx
 func FLBPluginFlushCtx(ctx, data unsafe.Pointer, length C.int, tag *C.char) int {
-	events, timestamps := unpackRecords(data, length)
-	go flushWithRetries(ctx, tag, events, timestamps, retries)
+	events, timestamps, count := unpackRecords(data, length)
+	go flushWithRetries(ctx, tag, count, events, timestamps, retries)
 	return output.FLB_OK
 }
 
-func flushWithRetries(ctx unsafe.Pointer, tag *C.char, events []map[interface{}]interface{}, timestamps []time.Time, retries int) {
+func flushWithRetries(ctx unsafe.Pointer, tag *C.char, count int, events []map[interface{}]interface{}, timestamps []time.Time, retries int) {
 	for i := 0; i < retries; i++ {
-		retCode := pluginConcurrentFlush(ctx, tag, events, timestamps)
+		retCode := pluginConcurrentFlush(ctx, tag, count, events, timestamps)
 		if retCode != output.FLB_RETRY {
 			break
 		}
 	}
 }
 
-func unpackRecords(data unsafe.Pointer, length C.int) (records []map[interface{}]interface{}, timestamps []time.Time) {
-	var count int
+func unpackRecords(data unsafe.Pointer, length C.int) (records []map[interface{}]interface{}, timestamps []time.Time, count int) {
 	var ret int
 	var ts interface{}
 	var timestamp time.Time
 	var record map[interface{}]interface{}
+	count = 0
 
-	records = make([]map[interface{}]interface{}, int(length))
-	timestamps = make([]time.Time, int(length))
+	records = make([]map[interface{}]interface{}, 100)
+	timestamps = make([]time.Time, 100)
 
 	// Create Fluent Bit decoder
 	dec := output.NewDecoder(data, int(length))
@@ -168,11 +168,10 @@ func unpackRecords(data unsafe.Pointer, length C.int) (records []map[interface{}
 		count++
 	}
 
-	return records, timestamps
+	return records, timestamps, count
 }
 
-func pluginConcurrentFlush(ctx unsafe.Pointer, tag *C.char, events []map[interface{}]interface{}, timestamps []time.Time) int {
-	var i int = 0
+func pluginConcurrentFlush(ctx unsafe.Pointer, tag *C.char, count int, events []map[interface{}]interface{}, timestamps []time.Time) int {
 	var timestamp time.Time
 	var event map[interface{}]interface{}
 
@@ -183,10 +182,7 @@ func pluginConcurrentFlush(ctx unsafe.Pointer, tag *C.char, events []map[interfa
 	// Each flush must have its own output buffe r, since flushes can be concurrent
 	records := make([]*kinesisAPI.PutRecordsRequestEntry, 0, maximumRecordsPerPut)
 
-	for {
-		if i >= len(events) || i >= len(timestamps) {
-			break
-		}
+	for i := 0; i < count; i++ {
 		event = events[i]
 		timestamp = timestamps[i]
 		retCode := kinesisOutput.AddRecord(&records, event, &timestamp)
@@ -199,7 +195,7 @@ func pluginConcurrentFlush(ctx unsafe.Pointer, tag *C.char, events []map[interfa
 	if retCode != output.FLB_OK {
 		return retCode
 	}
-	logrus.Debugf("[kinesis %d] Processed %d events with tag %s\n", kinesisOutput.PluginID, i, fluentTag)
+	logrus.Debugf("[kinesis %d] Processed %d events with tag %s\n", kinesisOutput.PluginID, count, fluentTag)
 
 	return output.FLB_OK
 }
