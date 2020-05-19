@@ -191,6 +191,8 @@ func (outputPlugin *OutputPlugin) AddRecord(records *[]*kinesis.PutRecordsReques
 		return fluentbit.FLB_OK
 	}
 
+	logrus.Infof("Processing record %\ns", string(data))
+
 	newRecordSize := len(data) + len(partitionKey)
 
 	if len(*records) == maximumRecordsPerPut || (outputPlugin.dataLength+newRecordSize) > maximumPutRecordBatchSize {
