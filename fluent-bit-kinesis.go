@@ -117,35 +117,32 @@ func FLBPluginInit(ctx unsafe.Pointer) int {
 
 //export FLBPluginFlushCtx
 func FLBPluginFlushCtx(ctx, data unsafe.Pointer, length C.int, tag *C.char) int {
-	go flushWithRetries(ctx, data, length, tag, retries)
+	events, timestamps := unpackRecords(data, length)
+	go flushWithRetries(ctx, tag, events, timestamps, retries)
 	return output.FLB_OK
 }
 
-func flushWithRetries(ctx, data unsafe.Pointer, length C.int, tag *C.char, retries int) {
+func flushWithRetries(ctx unsafe.Pointer, tag *C.char, events []map[interface{}]interface{}, timestamps []time.Time, retries int) {
 	for i := 0; i < retries; i++ {
-		retCode := pluginConcurrentFlush(ctx, data, length, tag)
+		retCode := pluginConcurrentFlush(ctx, tag, events, timestamps)
 		if retCode != output.FLB_RETRY {
 			break
 		}
 	}
 }
 
-func pluginConcurrentFlush(ctx, data unsafe.Pointer, length C.int, tag *C.char) int {
+func unpackRecords(data unsafe.Pointer, length C.int) (records []map[interface{}]interface{}, timestamps []time.Time) {
 	var count int
 	var ret int
 	var ts interface{}
 	var timestamp time.Time
 	var record map[interface{}]interface{}
 
+	records = make([]map[interface{}]interface{}, int(length))
+	timestamps = make([]time.Time, int(length))
+
 	// Create Fluent Bit decoder
 	dec := output.NewDecoder(data, int(length))
-
-	kinesisOutput := getPluginInstance(ctx)
-	fluentTag := C.GoString(tag)
-	logrus.Debugf("[kinesis %d] Found logs with tag: %s\n", kinesisOutput.PluginID, fluentTag)
-
-	// Each flush must have its own output buffer, since flushes can be concurrent
-	records := make([]*kinesisAPI.PutRecordsRequestEntry, 0, maximumRecordsPerPut)
 
 	for {
 		//Extract Record
@@ -165,17 +162,44 @@ func pluginConcurrentFlush(ctx, data unsafe.Pointer, length C.int, tag *C.char) 
 			timestamp = time.Now()
 		}
 
-		retCode := kinesisOutput.AddRecord(&records, record, &timestamp)
+		records = append(records, record)
+		timestamps = append(timestamps, timestamp)
+
+		count++
+	}
+
+	return records, timestamps
+}
+
+func pluginConcurrentFlush(ctx unsafe.Pointer, tag *C.char, events []map[interface{}]interface{}, timestamps []time.Time) int {
+	var i int = 0
+	var timestamp time.Time
+	var event map[interface{}]interface{}
+
+	kinesisOutput := getPluginInstance(ctx)
+	fluentTag := C.GoString(tag)
+	logrus.Debugf("[kinesis %d] Found logs with tag: %s\n", kinesisOutput.PluginID, fluentTag)
+
+	// Each flush must have its own output buffe r, since flushes can be concurrent
+	records := make([]*kinesisAPI.PutRecordsRequestEntry, 0, maximumRecordsPerPut)
+
+	for {
+		if i >= len(events) || i >= len(timestamps) {
+			break
+		}
+		event = events[i]
+		timestamp = timestamps[i]
+		retCode := kinesisOutput.AddRecord(&records, event, &timestamp)
 		if retCode != output.FLB_OK {
 			return retCode
 		}
-		count++
+		i++
 	}
 	retCode := kinesisOutput.Flush(&records)
 	if retCode != output.FLB_OK {
 		return retCode
 	}
-	logrus.Debugf("[kinesis %d] Processed %d events with tag %s\n", kinesisOutput.PluginID, count, fluentTag)
+	logrus.Debugf("[kinesis %d] Processed %d events with tag %s\n", kinesisOutput.PluginID, i, fluentTag)
 
 	return output.FLB_OK
 }
