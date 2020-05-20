@@ -197,7 +197,6 @@ func unpackRecords(data unsafe.Pointer, length C.int) (records []map[interface{}
 		record = records[i]
 		if record == nil {
 			logrus.Infof("unpack: %d is null\n", i)
-			continue
 		}
 		var json = jsoniter.ConfigCompatibleWithStandardLibrary
 		data, err := json.Marshal(record)
