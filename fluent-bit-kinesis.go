@@ -167,18 +167,13 @@ func unpackRecords(data unsafe.Pointer, length C.int) (records []map[interface{}
 		if record == nil {
 			logrus.Info("unpack: null record")
 			all_good = false
+		}
+		var json = jsoniter.ConfigCompatibleWithStandardLibrary
+		data, err := json.Marshal(record)
+		if err == nil {
+			logrus.Infof("unpack 2: %s\n", string(data))
 		} else {
-			var json = jsoniter.ConfigCompatibleWithStandardLibrary
-			data, err := json.Marshal(record)
-			if err == nil {
-				if len(data) == 0 {
-					logrus.Info("unpack: record has zero length")
-					all_good = false
-				}
-			} else {
-				logrus.Info("unpack: unmarshal error")
-				all_good = false
-			}
+			logrus.Info("unpack 2: unmarshal error")
 		}
 
 		records = append(records, record)
@@ -196,12 +191,12 @@ func unpackRecords(data unsafe.Pointer, length C.int) (records []map[interface{}
 	for i := 0; i < count; i++ {
 		record = records[i]
 		if record == nil {
-			logrus.Infof("unpack: %d is null\n", i)
+			logrus.Infof("unpack 2: %d is null\n", i)
 		}
 		var json = jsoniter.ConfigCompatibleWithStandardLibrary
 		data, err := json.Marshal(record)
 		if err == nil {
-			logrus.Infof("unpack: %s\n", string(data))
+			logrus.Infof("unpack 2: %s\n", string(data))
 		} else {
 			logrus.Info("unpack 2: unmarshal error")
 		}
