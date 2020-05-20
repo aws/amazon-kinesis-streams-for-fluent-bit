@@ -170,7 +170,7 @@ func unpackRecords(data unsafe.Pointer, length C.int) (records []map[interface{}
 		} else {
 			var json = jsoniter.ConfigCompatibleWithStandardLibrary
 			data, err := json.Marshal(record)
-			if err != nil {
+			if err == nil {
 				if len(data) == 0 {
 					logrus.Info("unpack: record has zero length")
 					all_good = false
