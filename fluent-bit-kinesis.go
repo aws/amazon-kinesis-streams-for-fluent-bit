@@ -193,6 +193,21 @@ func unpackRecords(data unsafe.Pointer, length C.int) (records []map[interface{}
 		logrus.Info("Not all good")
 	}
 
+	for i := 0; i < count; i++ {
+		record = records[i]
+		if record == nil {
+			logrus.Infof("unpack: %d is null\n", i)
+			continue
+		}
+		var json = jsoniter.ConfigCompatibleWithStandardLibrary
+		data, err := json.Marshal(record)
+		if err == nil {
+			logrus.Infof("unpack: %s\n", string(data))
+		} else {
+			logrus.Info("unpack 2: unmarshal error")
+		}
+	}
+
 	return records, timestamps, count
 }
 
@@ -206,6 +221,21 @@ func pluginConcurrentFlush(ctx unsafe.Pointer, tag *C.char, count int, events []
 
 	// Each flush must have its own output buffe r, since flushes can be concurrent
 	records := make([]*kinesisAPI.PutRecordsRequestEntry, 0, maximumRecordsPerPut)
+
+	for i := 0; i < count; i++ {
+		event = events[i]
+		if event == nil {
+			logrus.Infof("flush: %d is null\n", i)
+			continue
+		}
+		var json = jsoniter.ConfigCompatibleWithStandardLibrary
+		data, err := json.Marshal(event)
+		if err == nil {
+			logrus.Infof("flush: %s\n", string(data))
+		} else {
+			logrus.Info("flush: unmarshal error")
+		}
+	}
 
 	for i := 0; i < count; i++ {
 		event = events[i]
