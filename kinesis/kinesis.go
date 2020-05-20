@@ -191,7 +191,7 @@ func (outputPlugin *OutputPlugin) AddRecord(records *[]*kinesis.PutRecordsReques
 		return fluentbit.FLB_OK
 	}
 
-	logrus.Infof("Processing record %\ns", string(data))
+	logrus.Infof("Processing record %s\n", string(data))
 
 	newRecordSize := len(data) + len(partitionKey)
 

@@ -26,6 +26,7 @@ import (
 	"github.com/fluent/fluent-bit-go/output"
 	"github.com/sirupsen/logrus"
 )
+import jsoniter "github.com/json-iterator/go"
 
 const (
 	// Kinesis API Limit https://docs.aws.amazon.com/sdk-for-go/api/service/kinesis/#Kinesis.PutRecords
@@ -160,6 +161,18 @@ func unpackRecords(data unsafe.Pointer, length C.int) (records []map[interface{}
 			timestamp = time.Unix(int64(tts), 0)
 		default:
 			timestamp = time.Now()
+		}
+
+		if record == nil {
+			logrus.Info("unpack: null record")
+		} else {
+			var json = jsoniter.ConfigCompatibleWithStandardLibrary
+			data, err := json.Marshal(record)
+			if err != nil {
+				logrus.Infof("unpack: %s\n", err)
+			} else {
+				logrus.Infof("unpack: %s\n", string(data))
+			}
 		}
 
 		records = append(records, record)
