@@ -175,6 +175,9 @@ func unpackRecords(data unsafe.Pointer, length C.int) (records []map[interface{}
 					logrus.Info("unpack: record has zero length")
 					all_good = false
 				}
+			} else {
+				logrus.Info("unpack: unmarshal error")
+				all_good = false
 			}
 		}
 
