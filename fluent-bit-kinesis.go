@@ -138,6 +138,7 @@ func unpackRecords(data unsafe.Pointer, length C.int) (records []map[interface{}
 	var timestamp time.Time
 	var record map[interface{}]interface{}
 	count = 0
+	all_good := true
 
 	records = make([]map[interface{}]interface{}, 100)
 	timestamps = make([]time.Time, 100)
@@ -165,11 +166,15 @@ func unpackRecords(data unsafe.Pointer, length C.int) (records []map[interface{}
 
 		if record == nil {
 			logrus.Info("unpack: null record")
+			all_good = false
 		} else {
 			var json = jsoniter.ConfigCompatibleWithStandardLibrary
 			data, err := json.Marshal(record)
 			if err != nil {
-				logrus.Infof("unpack: %s\n", err)
+				if len(data) == 0 {
+					logrus.Info("unpack: record has zero length")
+					all_good = false
+				}
 			} else {
 				logrus.Infof("unpack: %s\n", string(data))
 			}
@@ -179,6 +184,12 @@ func unpackRecords(data unsafe.Pointer, length C.int) (records []map[interface{}
 		timestamps = append(timestamps, timestamp)
 
 		count++
+	}
+	logrus.Infof("Processed %d records", count)
+	if all_good {
+		logrus.Info("All good")
+	} else {
+		logrus.Info("Not all good")
 	}
 
 	return records, timestamps, count
