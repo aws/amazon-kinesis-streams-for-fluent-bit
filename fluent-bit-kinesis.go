@@ -26,7 +26,6 @@ import (
 	"github.com/fluent/fluent-bit-go/output"
 	"github.com/sirupsen/logrus"
 )
-import jsoniter "github.com/json-iterator/go"
 
 const (
 	// Kinesis API Limit https://docs.aws.amazon.com/sdk-for-go/api/service/kinesis/#Kinesis.PutRecords
@@ -118,30 +117,32 @@ func FLBPluginInit(ctx unsafe.Pointer) int {
 
 //export FLBPluginFlushCtx
 func FLBPluginFlushCtx(ctx, data unsafe.Pointer, length C.int, tag *C.char) int {
-	events, timestamps, count := unpackRecords(data, length)
-	go flushWithRetries(ctx, tag, count, events, timestamps, retries)
+	kinesisOutput := getPluginInstance(ctx)
+	events, count, retCode := unpackRecords(kinesisOutput, data, length)
+	if retCode != output.FLB_OK {
+		return retCode
+	}
+	go flushWithRetries(kinesisOutput, tag, count, events, retries)
 	return output.FLB_OK
 }
 
-func flushWithRetries(ctx unsafe.Pointer, tag *C.char, count int, events []map[interface{}]interface{}, timestamps []time.Time, retries int) {
+func flushWithRetries(kinesisOutput *kinesis.OutputPlugin, tag *C.char, count int, records []*kinesisAPI.PutRecordsRequestEntry, retries int) {
 	for i := 0; i < retries; i++ {
-		retCode := pluginConcurrentFlush(ctx, tag, count, events, timestamps)
+		retCode := pluginConcurrentFlush(kinesisOutput, tag, count, records)
 		if retCode != output.FLB_RETRY {
 			break
 		}
 	}
 }
 
-func unpackRecords(data unsafe.Pointer, length C.int) (records []map[interface{}]interface{}, timestamps []time.Time, count int) {
+func unpackRecords(kinesisOutput *kinesis.OutputPlugin, data unsafe.Pointer, length C.int) ([]*kinesisAPI.PutRecordsRequestEntry, int, int) {
 	var ret int
 	var ts interface{}
 	var timestamp time.Time
 	var record map[interface{}]interface{}
-	count = 0
-	all_good := true
+	count := 0
 
-	records = make([]map[interface{}]interface{}, 100)
-	timestamps = make([]time.Time, 100)
+	records := make([]*kinesisAPI.PutRecordsRequestEntry, 0, maximumRecordsPerPut)
 
 	// Create Fluent Bit decoder
 	dec := output.NewDecoder(data, int(length))
@@ -164,84 +165,21 @@ func unpackRecords(data unsafe.Pointer, length C.int) (records []map[interface{}
 			timestamp = time.Now()
 		}
 
-		if record == nil {
-			logrus.Info("unpack: null record")
-			all_good = false
+		retCode := kinesisOutput.AddRecord(&records, record, &timestamp)
+		if retCode != output.FLB_OK {
+			return nil, 0, retCode
 		}
-		logrus.Info("unpack: %v", record)
-		var json = jsoniter.ConfigCompatibleWithStandardLibrary
-		data, err := json.Marshal(record)
-		if err == nil {
-			logrus.Infof("unpack 2: %s\n", string(data))
-		} else {
-			logrus.Info("unpack 2: unmarshal error")
-		}
-
-		records = append(records, record)
-		timestamps = append(timestamps, timestamp)
 
 		count++
 	}
-	logrus.Infof("Processed %d records", count)
-	if all_good {
-		logrus.Info("All good")
-	} else {
-		logrus.Info("Not all good")
-	}
 
-	for i := 0; i < count; i++ {
-		record = records[i]
-		logrus.Info("unpack 2: %v", record)
-		if record == nil {
-			logrus.Infof("unpack 2: %d is null\n", i)
-		}
-		var json = jsoniter.ConfigCompatibleWithStandardLibrary
-		data, err := json.Marshal(record)
-		if err == nil {
-			logrus.Infof("unpack 2: %s\n", string(data))
-		} else {
-			logrus.Info("unpack 2: unmarshal error")
-		}
-	}
-
-	return records, timestamps, count
+	return records, count, output.FLB_OK
 }
 
-func pluginConcurrentFlush(ctx unsafe.Pointer, tag *C.char, count int, events []map[interface{}]interface{}, timestamps []time.Time) int {
-	var timestamp time.Time
-	var event map[interface{}]interface{}
-
-	kinesisOutput := getPluginInstance(ctx)
+func pluginConcurrentFlush(kinesisOutput *kinesis.OutputPlugin, tag *C.char, count int, records []*kinesisAPI.PutRecordsRequestEntry) int {
 	fluentTag := C.GoString(tag)
 	logrus.Debugf("[kinesis %d] Found logs with tag: %s\n", kinesisOutput.PluginID, fluentTag)
 
-	// Each flush must have its own output buffe r, since flushes can be concurrent
-	records := make([]*kinesisAPI.PutRecordsRequestEntry, 0, maximumRecordsPerPut)
-
-	for i := 0; i < count; i++ {
-		event = events[i]
-		if event == nil {
-			logrus.Infof("flush: %d is null\n", i)
-			continue
-		}
-		var json = jsoniter.ConfigCompatibleWithStandardLibrary
-		data, err := json.Marshal(event)
-		if err == nil {
-			logrus.Infof("flush: %s\n", string(data))
-		} else {
-			logrus.Info("flush: unmarshal error")
-		}
-	}
-
-	for i := 0; i < count; i++ {
-		event = events[i]
-		timestamp = timestamps[i]
-		retCode := kinesisOutput.AddRecord(&records, event, &timestamp)
-		if retCode != output.FLB_OK {
-			return retCode
-		}
-		i++
-	}
 	retCode := kinesisOutput.Flush(&records)
 	if retCode != output.FLB_OK {
 		return retCode
