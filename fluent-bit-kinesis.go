@@ -128,6 +128,7 @@ func FLBPluginFlushCtx(ctx, data unsafe.Pointer, length C.int, tag *C.char) int 
 
 func flushWithRetries(kinesisOutput *kinesis.OutputPlugin, tag *C.char, count int, records []*kinesisAPI.PutRecordsRequestEntry, retries int) {
 	for i := 0; i < retries; i++ {
+		// TODO: Would probably want to backoff before retrying?
 		retCode := pluginConcurrentFlush(kinesisOutput, tag, count, records)
 		if retCode != output.FLB_RETRY {
 			break

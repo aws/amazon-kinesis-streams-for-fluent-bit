@@ -208,6 +208,8 @@ func (outputPlugin *OutputPlugin) Flush(records *[]*kinesis.PutRecordsRequestEnt
 			retCode, err := outputPlugin.sendCurrentBatch(&requestBuf, &dataLength)
 			if err != nil {
 				logrus.Errorf("[kinesis %d] %v\n", outputPlugin.PluginID, err)
+			}
+			if retCode != fluentbit.FLB_OK {
 				return retCode
 			}
 		}
