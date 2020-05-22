@@ -75,14 +75,13 @@ type OutputPlugin struct {
 	// Partition key decides in which shard of your stream the data belongs to
 	partitionKey string
 	// Decides whether to append a newline after each data record
-	appendNewline                bool
-	timeKey                      string
-	fmtStrftime                  *strftime.Strftime
-	lastInvalidPartitionKeyIndex int
-	client                       PutRecordsClient
-	timer                        *plugins.Timeout
-	PluginID                     int
-	random                       *random
+	appendNewline bool
+	timeKey       string
+	fmtStrftime   *strftime.Strftime
+	client        PutRecordsClient
+	timer         *plugins.Timeout
+	PluginID      int
+	random        *random
 }
 
 // NewOutputPlugin creates an OutputPlugin object
@@ -121,17 +120,16 @@ func NewOutputPlugin(region, stream, dataKeys, partitionKey, roleARN, endpoint, 
 	}
 
 	return &OutputPlugin{
-		stream:                       stream,
-		client:                       client,
-		dataKeys:                     dataKeys,
-		partitionKey:                 partitionKey,
-		appendNewline:                appendNewline,
-		timeKey:                      timeKey,
-		fmtStrftime:                  timeFormatter,
-		lastInvalidPartitionKeyIndex: -1,
-		timer:                        timer,
-		PluginID:                     pluginID,
-		random:                       random,
+		stream:        stream,
+		client:        client,
+		dataKeys:      dataKeys,
+		partitionKey:  partitionKey,
+		appendNewline: appendNewline,
+		timeKey:       timeKey,
+		fmtStrftime:   timeFormatter,
+		timer:         timer,
+		PluginID:      pluginID,
+		random:        random,
 	}, nil
 }
 
@@ -261,10 +259,6 @@ func (outputPlugin *OutputPlugin) sendCurrentBatch(records *[]*kinesis.PutRecord
 	if len(*records) == 0 {
 		return fluentbit.FLB_OK, nil
 	}
-	if outputPlugin.lastInvalidPartitionKeyIndex >= 0 && outputPlugin.lastInvalidPartitionKeyIndex <= len(*records) {
-		logrus.Errorf("[kinesis %d] Invalid partition key. Failed to find partition_key %s in log record %s", outputPlugin.PluginID, outputPlugin.partitionKey, (*records)[outputPlugin.lastInvalidPartitionKeyIndex].Data)
-		outputPlugin.lastInvalidPartitionKeyIndex = -1
-	}
 	outputPlugin.timer.Check()
 	logrus.Infof("About to send %d records to %s", len(*records), outputPlugin.stream)
 	response, err := outputPlugin.client.PutRecords(&kinesis.PutRecordsInput{
@@ -352,7 +346,6 @@ func (outputPlugin *OutputPlugin) getPartitionKey(records []*kinesis.PutRecordsR
 				}
 			}
 		}
-		outputPlugin.lastInvalidPartitionKeyIndex = len(records) % maximumRecordsPerPut
 	}
 	return outputPlugin.randomString()
 }
