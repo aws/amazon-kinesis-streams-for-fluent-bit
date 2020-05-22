@@ -189,8 +189,6 @@ func (outputPlugin *OutputPlugin) AddRecord(records *[]*kinesis.PutRecordsReques
 		return fluentbit.FLB_OK
 	}
 
-	logrus.Infof("Adding record %s\n", string(data))
-
 	*records = append(*records, &kinesis.PutRecordsRequestEntry{
 		Data:         data,
 		PartitionKey: aws.String(partitionKey),
@@ -261,7 +259,6 @@ func (outputPlugin *OutputPlugin) processRecord(record map[interface{}]interface
 
 func (outputPlugin *OutputPlugin) sendCurrentBatch(records *[]*kinesis.PutRecordsRequestEntry, dataLength *int) (int, error) {
 	if len(*records) == 0 {
-		logrus.Info("No records")
 		return fluentbit.FLB_OK, nil
 	}
 	if outputPlugin.lastInvalidPartitionKeyIndex >= 0 && outputPlugin.lastInvalidPartitionKeyIndex <= len(*records) {
