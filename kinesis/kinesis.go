@@ -262,12 +262,10 @@ func (outputPlugin *OutputPlugin) sendCurrentBatch(records *[]*kinesis.PutRecord
 		return fluentbit.FLB_OK, nil
 	}
 	outputPlugin.timer.Check()
-	logrus.Infof("About to send %d records to %s", len(*records), outputPlugin.stream)
 	response, err := outputPlugin.client.PutRecords(&kinesis.PutRecordsInput{
 		Records:    *records,
 		StreamName: aws.String(outputPlugin.stream),
 	})
-	logrus.Infof("Tried to send %d records", len(*records))
 	if err != nil {
 		logrus.Errorf("[kinesis %d] PutRecords failed with %v\n", outputPlugin.PluginID, err)
 		outputPlugin.timer.Start()
