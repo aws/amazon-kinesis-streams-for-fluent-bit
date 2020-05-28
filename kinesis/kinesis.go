@@ -200,6 +200,8 @@ func (outputPlugin *OutputPlugin) AddRecord(record map[interface{}]interface{}, 
 		retCode, err := outputPlugin.sendCurrentBatch()
 		if err != nil {
 			logrus.Errorf("[kinesis %d] %v\n", outputPlugin.PluginID, err)
+		}
+		if retCode != fluentbit.FLB_OK {
 			return retCode
 		}
 	}
