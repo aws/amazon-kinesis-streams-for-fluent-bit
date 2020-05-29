@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"sync/atomic"
 	"time"
 
 	"github.com/aws/amazon-kinesis-firehose-for-fluent-bit/plugins"
@@ -82,6 +83,8 @@ type OutputPlugin struct {
 	timer         *plugins.Timeout
 	PluginID      int
 	random        *random
+	// Used to implement backoff for concurrent flushes
+	concurrentRetries int64
 }
 
 // NewOutputPlugin creates an OutputPlugin object
@@ -201,7 +204,7 @@ func (outputPlugin *OutputPlugin) Flush(records *[]*kinesis.PutRecordsRequestEnt
 	requestBuf := make([]*kinesis.PutRecordsRequestEntry, 0, maximumRecordsPerPut)
 	dataLength := 0
 
-	for _, record := range *records {
+	for i, record := range *records {
 		newRecordSize := len(record.Data) + len(aws.StringValue(record.PartitionKey))
 
 		if len(requestBuf) == maximumRecordsPerPut || (dataLength+newRecordSize) > maximumPutRecordBatchSize {
@@ -210,6 +213,10 @@ func (outputPlugin *OutputPlugin) Flush(records *[]*kinesis.PutRecordsRequestEnt
 				logrus.Errorf("[kinesis %d] %v\n", outputPlugin.PluginID, err)
 			}
 			if retCode != fluentbit.FLB_OK {
+				unsent := (*records)[i:]
+				// requestBuf will contain records sendCurrentBatch failed to send,
+				// combine those with the records yet to be sent/batched
+				*records = append(requestBuf, unsent...)
 				return retCode
 			}
 		}
@@ -223,6 +230,8 @@ func (outputPlugin *OutputPlugin) Flush(records *[]*kinesis.PutRecordsRequestEnt
 	if err != nil {
 		logrus.Errorf("[kinesis %d] %v\n", outputPlugin.PluginID, err)
 	}
+	// requestBuf will contain records sendCurrentBatch failed to send
+	*records = requestBuf
 	return retCode
 }
 
@@ -284,6 +293,9 @@ func (outputPlugin *OutputPlugin) sendCurrentBatch(records *[]*kinesis.PutRecord
 // processAPIResponse processes the successful and failed records
 // it returns an error iff no records succeeded (i.e.) no progress has been made
 func (outputPlugin *OutputPlugin) processAPIResponse(records *[]*kinesis.PutRecordsRequestEntry, dataLength *int, response *kinesis.PutRecordsOutput) (int, error) {
+
+	var retCode int = fluentbit.FLB_OK
+
 	if aws.Int64Value(response.FailedRecordCount) > 0 {
 		// start timer if all records failed (no progress has been made)
 		if aws.Int64Value(response.FailedRecordCount) == int64(len(*records)) {
@@ -291,7 +303,7 @@ func (outputPlugin *OutputPlugin) processAPIResponse(records *[]*kinesis.PutReco
 			return fluentbit.FLB_RETRY, fmt.Errorf("PutRecords request returned with no records successfully recieved")
 		}
 
-		logrus.Warnf("[kinesis %d] %d records failed to be delivered. Will retry.\n", outputPlugin.PluginID, aws.Int64Value(response.FailedRecordCount))
+		logrus.Warnf("[kinesis %d] %d/%d records failed to be delivered. Will retry.\n", outputPlugin.PluginID, aws.Int64Value(response.FailedRecordCount), len(*records))
 		failedRecords := make([]*kinesis.PutRecordsRequestEntry, 0, aws.Int64Value(response.FailedRecordCount))
 		// try to resend failed records
 		for i, record := range response.Records {
@@ -299,10 +311,14 @@ func (outputPlugin *OutputPlugin) processAPIResponse(records *[]*kinesis.PutReco
 				logrus.Debugf("[kinesis %d] Record failed to send with error: %s\n", outputPlugin.PluginID, aws.StringValue(record.ErrorMessage))
 				failedRecords = append(failedRecords, (*records)[i])
 			}
+
 			if aws.StringValue(record.ErrorCode) == kinesis.ErrCodeProvisionedThroughputExceededException {
-				logrus.Warnf("[kinesis %d] Throughput limits for the stream may have been exceeded.", outputPlugin.PluginID)
-				return fluentbit.FLB_RETRY, nil
+				retCode = fluentbit.FLB_RETRY
 			}
+		}
+
+		if retCode == fluentbit.FLB_RETRY {
+			logrus.Warnf("[kinesis %d] Throughput limits for the stream may have been exceeded.", outputPlugin.PluginID)
 		}
 
 		*records = (*records)[:0]
@@ -317,7 +333,7 @@ func (outputPlugin *OutputPlugin) processAPIResponse(records *[]*kinesis.PutReco
 		*records = (*records)[:0]
 		*dataLength = 0
 	}
-	return fluentbit.FLB_OK, nil
+	return retCode, nil
 }
 
 // randomString generates a random string of length 8
@@ -360,4 +376,14 @@ func stringOrByteArray(v interface{}) string {
 	default:
 		return ""
 	}
+}
+
+// GetConcurrentRetries value (goroutine safe)
+func (outputPlugin *OutputPlugin) GetConcurrentRetries() int64 {
+	return atomic.LoadInt64(&outputPlugin.concurrentRetries)
+}
+
+// AddConcurrentRetries will update the value (goroutine safe)
+func (outputPlugin *OutputPlugin) AddConcurrentRetries(val int64) int64 {
+	return atomic.AddInt64(&outputPlugin.concurrentRetries, int64(val))
 }
