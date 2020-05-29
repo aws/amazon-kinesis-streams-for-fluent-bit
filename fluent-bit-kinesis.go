@@ -33,7 +33,8 @@ const (
 )
 
 const (
-	retries = 2
+	retries              = 6
+	concurrentRetryLimit = 4
 )
 
 var (
@@ -118,8 +119,16 @@ func FLBPluginInit(ctx unsafe.Pointer) int {
 //export FLBPluginFlushCtx
 func FLBPluginFlushCtx(ctx, data unsafe.Pointer, length C.int, tag *C.char) int {
 	kinesisOutput := getPluginInstance(ctx)
+
+	curRetries := kinesisOutput.GetConcurrentRetries()
+	if curRetries > concurrentRetryLimit {
+		logrus.Infof("[kinesis] flush returning retry, too many concurrent retries (%d)\n", curRetries)
+		return output.FLB_RETRY
+	}
+
 	events, count, retCode := unpackRecords(kinesisOutput, data, length)
 	if retCode != output.FLB_OK {
+		logrus.Errorf("[kinesis] failed to unpackRecords\n")
 		return retCode
 	}
 	go flushWithRetries(kinesisOutput, tag, count, events, retries)
@@ -127,12 +136,32 @@ func FLBPluginFlushCtx(ctx, data unsafe.Pointer, length C.int, tag *C.char) int 
 }
 
 func flushWithRetries(kinesisOutput *kinesis.OutputPlugin, tag *C.char, count int, records []*kinesisAPI.PutRecordsRequestEntry, retries int) {
-	for i := 0; i < retries; i++ {
-		// TODO: Would probably want to backoff before retrying?
-		retCode := pluginConcurrentFlush(kinesisOutput, tag, count, records)
+	var retCode, tries int
+
+	backoff := kinesisOutput.GetConcurrentRetries()
+
+	for tries = 0; tries < retries; tries++ {
+		if backoff > 0 {
+			// Wait if other goroutines are in backoff mode, as well as implement a progressive backoff
+			time.Sleep(time.Duration((2^backoff)*100) * time.Millisecond)
+		}
+
+		logrus.Debugf("[kinesis] Sending (%p) (%d) records, backoff=(%d)", records, len(records), backoff)
+		retCode = pluginConcurrentFlush(kinesisOutput, tag, count, &records)
 		if retCode != output.FLB_RETRY {
 			break
 		}
+		backoff = kinesisOutput.AddConcurrentRetries(1)
+		logrus.Infof("[kinesis] Going to retry with (%p) (%d) records, backoff=(%d)", records, len(records), backoff)
+	}
+	if tries > 0 {
+		kinesisOutput.AddConcurrentRetries(int64(-tries))
+	}
+	if retCode == output.FLB_ERROR {
+		logrus.Errorf("[kinesis] Failed to flush (%d) records with error", len(records))
+	}
+	if retCode == output.FLB_RETRY {
+		logrus.Errorf("[kinesis] Failed flush (%d) records after retries %d", len(records), retries)
 	}
 }
 
@@ -177,11 +206,10 @@ func unpackRecords(kinesisOutput *kinesis.OutputPlugin, data unsafe.Pointer, len
 	return records, count, output.FLB_OK
 }
 
-func pluginConcurrentFlush(kinesisOutput *kinesis.OutputPlugin, tag *C.char, count int, records []*kinesisAPI.PutRecordsRequestEntry) int {
+func pluginConcurrentFlush(kinesisOutput *kinesis.OutputPlugin, tag *C.char, count int, records *[]*kinesisAPI.PutRecordsRequestEntry) int {
 	fluentTag := C.GoString(tag)
 	logrus.Debugf("[kinesis %d] Found logs with tag: %s\n", kinesisOutput.PluginID, fluentTag)
-
-	retCode := kinesisOutput.Flush(&records)
+	retCode := kinesisOutput.Flush(records)
 	if retCode != output.FLB_OK {
 		return retCode
 	}
