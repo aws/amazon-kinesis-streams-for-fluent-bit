@@ -1,7 +1,10 @@
 # Changelog
 
+## 1.2.2
+* Bug - Remove exponential backoff code (#27)
+
 ## 1.2.1
-* Bug Fix - Updated logic to calculate the individual and maximum record size (#22) 
+* Bug Fix - Updated logic to calculate the individual and maximum record size (#22)
 
 ## 1.2.0
 * Feature - Add time_key and time_key_format config options to add timestamp to records (#17)
