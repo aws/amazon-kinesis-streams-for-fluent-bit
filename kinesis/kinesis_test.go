@@ -40,7 +40,6 @@ func newMockOutputPlugin(client *mock_kinesis.MockPutRecordsClient) (*OutputPlug
 		dataKeys:                     "",
 		partitionKey:                 "",
 		lastInvalidPartitionKeyIndex: -1,
-		backoff:                      plugins.NewBackoff(),
 		timer:                        timer,
 		PluginID:                     0,
 		random:                       random,
@@ -98,6 +97,6 @@ func TestAddRecordAndFlush(t *testing.T) {
 	retCode := outputPlugin.AddRecord(record, &timeStamp)
 	assert.Equal(t, retCode, fluentbit.FLB_OK, "Expected return code to be FLB_OK")
 
-	err := outputPlugin.Flush()
-	assert.NoError(t, err, "Unexpected error calling flush")
+	retCode = outputPlugin.Flush()
+	assert.Equal(t, retCode, fluentbit.FLB_OK, "Expected return code to be FLB_OK")
 }
