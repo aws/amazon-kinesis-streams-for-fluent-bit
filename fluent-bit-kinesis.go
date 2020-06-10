@@ -33,8 +33,7 @@ const (
 )
 
 const (
-	retries              = 6
-	concurrentRetryLimit = 4
+	retries = 6
 )
 
 var (
@@ -77,6 +76,8 @@ func newKinesisOutput(ctx unsafe.Pointer, pluginID int) (*kinesis.OutputPlugin, 
 	logrus.Infof("[firehose %d] plugin parameter time_key = '%s'\n", pluginID, timeKey)
 	timeKeyFmt := output.FLBPluginConfigKey(ctx, "time_key_format")
 	logrus.Infof("[firehose %d] plugin parameter time_key_format = '%s'\n", pluginID, timeKeyFmt)
+	concurrency := output.FLBPluginConfigKey(ctx, "concurrency")
+	logrus.Infof("[firehose %d] plugin parameter concurrency = '%s'\n", pluginID, concurrency)
 
 	if stream == "" || region == "" {
 		return nil, fmt.Errorf("[kinesis %d] stream and region are required configuration parameters", pluginID)
@@ -94,7 +95,7 @@ func newKinesisOutput(ctx unsafe.Pointer, pluginID int) (*kinesis.OutputPlugin, 
 	if strings.ToLower(appendNewline) == "true" {
 		appendNL = true
 	}
-	return kinesis.NewOutputPlugin(region, stream, dataKeys, partitionKey, roleARN, endpoint, timeKey, timeKeyFmt, appendNL, pluginID)
+	return kinesis.NewOutputPlugin(region, stream, dataKeys, partitionKey, roleARN, endpoint, timeKey, concurrency, timeKeyFmt, appendNL, pluginID)
 }
 
 // The "export" comments have syntactic meaning
@@ -120,49 +121,20 @@ func FLBPluginInit(ctx unsafe.Pointer) int {
 func FLBPluginFlushCtx(ctx, data unsafe.Pointer, length C.int, tag *C.char) int {
 	kinesisOutput := getPluginInstance(ctx)
 
-	curRetries := kinesisOutput.GetConcurrentRetries()
-	if curRetries > concurrentRetryLimit {
-		logrus.Infof("[kinesis] flush returning retry, too many concurrent retries (%d)\n", curRetries)
-		return output.FLB_RETRY
-	}
+	fluentTag := C.GoString(tag)
 
 	events, count, retCode := unpackRecords(kinesisOutput, data, length)
 	if retCode != output.FLB_OK {
-		logrus.Errorf("[kinesis] failed to unpackRecords\n")
+		logrus.Errorf("[kinesis %d] failed to unpackRecords with tag: %s\n", kinesisOutput.PluginID, fluentTag)
 		return retCode
 	}
-	go flushWithRetries(kinesisOutput, tag, count, events, retries)
-	return output.FLB_OK
-}
 
-func flushWithRetries(kinesisOutput *kinesis.OutputPlugin, tag *C.char, count int, records []*kinesisAPI.PutRecordsRequestEntry, retries int) {
-	var retCode, tries int
+	logrus.Debugf("[kinesis %d] Flushing %d logs with tag: %s\n", kinesisOutput.PluginID, count, fluentTag)
+	if kinesisOutput.Concurrency > 0 {
+		return kinesisOutput.FlushConcurrent(count, events, retries)
+	}
 
-	currentRetries := kinesisOutput.GetConcurrentRetries()
-
-	for tries = 0; tries < retries; tries++ {
-		if currentRetries > 0 {
-			// Wait if other goroutines are retrying, as well as implement a progressive backoff
-			time.Sleep(time.Duration((2^currentRetries)*100) * time.Millisecond)
-		}
-
-		logrus.Debugf("[kinesis] Sending (%p) (%d) records, currentRetries=(%d)", records, len(records), currentRetries)
-		retCode = pluginConcurrentFlush(kinesisOutput, tag, count, &records)
-		if retCode != output.FLB_RETRY {
-			break
-		}
-		currentRetries = kinesisOutput.AddConcurrentRetries(1)
-		logrus.Infof("[kinesis] Going to retry with (%p) (%d) records, currentRetries=(%d)", records, len(records), currentRetries)
-	}
-	if tries > 0 {
-		kinesisOutput.AddConcurrentRetries(int64(-tries))
-	}
-	if retCode == output.FLB_ERROR {
-		logrus.Errorf("[kinesis] Failed to flush (%d) records with error", len(records))
-	}
-	if retCode == output.FLB_RETRY {
-		logrus.Errorf("[kinesis] Failed flush (%d) records after retries %d", len(records), retries)
-	}
+	return kinesisOutput.Flush(&events)
 }
 
 func unpackRecords(kinesisOutput *kinesis.OutputPlugin, data unsafe.Pointer, length C.int) ([]*kinesisAPI.PutRecordsRequestEntry, int, int) {
@@ -204,18 +176,6 @@ func unpackRecords(kinesisOutput *kinesis.OutputPlugin, data unsafe.Pointer, len
 	}
 
 	return records, count, output.FLB_OK
-}
-
-func pluginConcurrentFlush(kinesisOutput *kinesis.OutputPlugin, tag *C.char, count int, records *[]*kinesisAPI.PutRecordsRequestEntry) int {
-	fluentTag := C.GoString(tag)
-	logrus.Debugf("[kinesis %d] Found logs with tag: %s\n", kinesisOutput.PluginID, fluentTag)
-	retCode := kinesisOutput.Flush(records)
-	if retCode != output.FLB_OK {
-		return retCode
-	}
-	logrus.Debugf("[kinesis %d] Processed %d events with tag %s\n", kinesisOutput.PluginID, count, fluentTag)
-
-	return output.FLB_OK
 }
 
 //export FLBPluginExit
