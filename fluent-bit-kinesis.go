@@ -126,6 +126,7 @@ func FLBPluginFlushCtx(ctx, data unsafe.Pointer, length C.int, tag *C.char) int 
 	events, count, retCode := unpackRecords(kinesisOutput, data, length)
 	if retCode != output.FLB_OK {
 		logrus.Errorf("[kinesis %d] failed to unpackRecords with tag: %s\n", kinesisOutput.PluginID, fluentTag)
+
 		return retCode
 	}
 
@@ -177,6 +178,7 @@ func unpackRecords(kinesisOutput *kinesis.OutputPlugin, data unsafe.Pointer, len
 
 	return records, count, output.FLB_OK
 }
+
 
 //export FLBPluginExit
 func FLBPluginExit() int {
