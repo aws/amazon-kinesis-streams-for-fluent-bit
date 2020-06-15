@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
-	"strconv"
 	"sync/atomic"
 	"time"
 
@@ -85,7 +84,8 @@ type OutputPlugin struct {
 	timer         *plugins.Timeout
 	PluginID      int
 	random        *random
-	Concurrency   int32
+	Concurrency   int
+	retryLimit    int
 	// Concurrency is the limit, goroutineCount represents the running goroutines
 	goroutineCount int32
 	// Used to implement backoff for concurrent flushes
@@ -93,7 +93,7 @@ type OutputPlugin struct {
 }
 
 // NewOutputPlugin creates an OutputPlugin object
-func NewOutputPlugin(region, stream, dataKeys, partitionKey, roleARN, endpoint, timeKey, concurrency, timeFmt string, appendNewline bool, pluginID int) (*OutputPlugin, error) {
+func NewOutputPlugin(region, stream, dataKeys, partitionKey, roleARN, endpoint, timeKey, timeFmt string, concurrency, retryLimit int, appendNewline bool, pluginID int) (*OutputPlugin, error) {
 	client, err := newPutRecordsClient(roleARN, region, endpoint)
 	if err != nil {
 		return nil, err
@@ -127,19 +127,6 @@ func NewOutputPlugin(region, stream, dataKeys, partitionKey, roleARN, endpoint, 
 		}
 	}
 
-	var concurrencyInt int
-	if concurrency != "" {
-		concurrencyInt, err = strconv.Atoi(concurrency)
-		if err != nil {
-			logrus.Errorf("[kinesis %d] Invalid 'concurrency' value %s specified: %v", pluginID, concurrency, err)
-			return nil, err
-		}
-		if concurrencyInt < 0 {
-			logrus.Errorf("[kinesis %d] Invalid 'concurrency' value (%s) specified, must be a non-negative number", pluginID, concurrency)
-			return nil, err
-		}
-	}
-
 	return &OutputPlugin{
 		stream:        stream,
 		client:        client,
@@ -151,7 +138,8 @@ func NewOutputPlugin(region, stream, dataKeys, partitionKey, roleARN, endpoint, 
 		timer:         timer,
 		PluginID:      pluginID,
 		random:        random,
-		Concurrency:   int32(concurrencyInt),
+		Concurrency:   concurrency,
+		retryLimit:    retryLimit,
 	}, nil
 }
 
@@ -260,17 +248,17 @@ func (outputPlugin *OutputPlugin) Flush(records *[]*kinesis.PutRecordsRequestEnt
 }
 
 // FlushWithRetries sends the current buffer of log records, with retries
-func (outputPlugin *OutputPlugin) FlushWithRetries(count int, records []*kinesis.PutRecordsRequestEntry, retries int) {
+func (outputPlugin *OutputPlugin) FlushWithRetries(count int, records []*kinesis.PutRecordsRequestEntry) {
 	var retCode, tries int
 
 	currentRetries := outputPlugin.getConcurrentRetries()
 	outputPlugin.addGoroutineCount(1)
 
-	for tries = 0; tries < retries; tries++ {
+	for tries = 0; tries < outputPlugin.retryLimit; tries++ {
 		if currentRetries > 0 {
 			// Wait if other goroutines are retrying, as well as implement a progressive backoff
-			if currentRetries > uint32(retries) {
-				time.Sleep(time.Duration((1<<uint32(retries))*100) * time.Millisecond)
+			if currentRetries > uint32(outputPlugin.retryLimit) {
+				time.Sleep(time.Duration((1<<uint32(outputPlugin.retryLimit))*100) * time.Millisecond)
 			} else {
 				time.Sleep(time.Duration((1<<currentRetries)*100) * time.Millisecond)
 			}
@@ -294,7 +282,7 @@ func (outputPlugin *OutputPlugin) FlushWithRetries(count int, records []*kinesis
 	case output.FLB_ERROR:
 		logrus.Errorf("[kinesis %d] Failed to send (%d) records with error", outputPlugin.PluginID, len(records))
 	case output.FLB_RETRY:
-		logrus.Errorf("[kinesis %d] Failed to send (%d) records after retries %d", outputPlugin.PluginID, len(records), retries)
+		logrus.Errorf("[kinesis %d] Failed to send (%d) records after retries %d", outputPlugin.PluginID, len(records), outputPlugin.retryLimit)
 	case output.FLB_OK:
 		logrus.Debugf("[kinesis %d] Flushed %d records\n", outputPlugin.PluginID, count)
 	}
@@ -303,10 +291,10 @@ func (outputPlugin *OutputPlugin) FlushWithRetries(count int, records []*kinesis
 // FlushConcurrent sends the current buffer of log records in a goroutine with retries
 // Returns FLB_OK, FLB_RETRY
 // Will return FLB_RETRY if the limit of concurrency has been reached
-func (outputPlugin *OutputPlugin) FlushConcurrent(count int, records []*kinesis.PutRecordsRequestEntry, retries int) int {
+func (outputPlugin *OutputPlugin) FlushConcurrent(count int, records []*kinesis.PutRecordsRequestEntry) int {
 
 	runningGoRoutines := outputPlugin.getGoroutineCount()
-	if runningGoRoutines+1 > outputPlugin.Concurrency {
+	if runningGoRoutines+1 > int32(outputPlugin.Concurrency) {
 		logrus.Infof("[kinesis %d] flush returning retry, concurrency limit reached (%d)\n", outputPlugin.PluginID, runningGoRoutines)
 		return output.FLB_RETRY
 	}
@@ -317,7 +305,7 @@ func (outputPlugin *OutputPlugin) FlushConcurrent(count int, records []*kinesis.
 		return output.FLB_RETRY
 	}
 
-	go outputPlugin.FlushWithRetries(count, records, retries)
+	go outputPlugin.FlushWithRetries(count, records)
 
 	return output.FLB_OK
 }
