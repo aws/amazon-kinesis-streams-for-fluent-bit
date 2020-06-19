@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/aws/aws-sdk-go/aws/awserr"
+
 	"github.com/aws/amazon-kinesis-firehose-for-fluent-bit/plugins"
 	"github.com/aws/amazon-kinesis-streams-for-fluent-bit/kinesis/mock_kinesis"
 	"github.com/aws/aws-sdk-go/aws"
@@ -40,9 +42,9 @@ func newMockOutputPlugin(client *mock_kinesis.MockPutRecordsClient) (*OutputPlug
 		dataKeys:                     "",
 		partitionKey:                 "",
 		lastInvalidPartitionKeyIndex: -1,
-		timer:                        timer,
-		PluginID:                     0,
-		random:                       random,
+		timer:    timer,
+		PluginID: 0,
+		random:   random,
 	}, nil
 }
 
@@ -96,6 +98,72 @@ func TestAddRecordAndFlush(t *testing.T) {
 	timeStamp := time.Now()
 	retCode := outputPlugin.AddRecord(record, &timeStamp)
 	assert.Equal(t, retCode, fluentbit.FLB_OK, "Expected return code to be FLB_OK")
+
+	retCode = outputPlugin.Flush()
+	assert.Equal(t, retCode, fluentbit.FLB_OK, "Expected return code to be FLB_OK")
+}
+
+func TestFlushRetries(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockKinesis := mock_kinesis.NewMockPutRecordsClient(ctrl)
+	outputPlugin, _ := newMockOutputPlugin(mockKinesis)
+
+	record1 := map[interface{}]interface{}{
+		"testkey1": []byte("test value 1"),
+	}
+	record2 := map[interface{}]interface{}{
+		"testkey2": []byte("test value 2"),
+	}
+	timeStamp := time.Now()
+
+	outputPlugin.AddRecord(record1, &timeStamp)
+	outputPlugin.AddRecord(record2, &timeStamp)
+
+	gomock.InOrder(
+		// First request that cannot flush whole buffer
+		mockKinesis.EXPECT().
+			PutRecords(&kinesis.PutRecordsInput{
+				Records:    outputPlugin.records,
+				StreamName: aws.String(outputPlugin.stream),
+			}).
+			Return(
+				&kinesis.PutRecordsOutput{
+					FailedRecordCount: aws.Int64(1),
+					Records: []*kinesis.PutRecordsResultEntry{ // successfully processed record
+						&kinesis.PutRecordsResultEntry{
+							ErrorMessage: nil,
+						},
+						&kinesis.PutRecordsResultEntry{ // failed record
+							ErrorCode:    aws.String(kinesis.ErrCodeProvisionedThroughputExceededException),
+							ErrorMessage: aws.String("Some error message"),
+						},
+					},
+				},
+				awserr.New(
+					kinesis.ErrCodeProvisionedThroughputExceededException,
+					"ProvisionedThroughputExceededException",
+					nil),
+			),
+
+		// Second request which retries only one record which hasn't been put successfully
+		mockKinesis.EXPECT().
+			PutRecords(&kinesis.PutRecordsInput{
+				// only second record is failed, so should be retried
+				Records:    outputPlugin.records[1:2],
+				StreamName: aws.String(outputPlugin.stream),
+			}).
+			Return(
+				&kinesis.PutRecordsOutput{
+					FailedRecordCount: aws.Int64(0),
+				},
+				nil,
+			),
+	)
+
+	retCode := outputPlugin.Flush()
+	assert.Equal(t, retCode, fluentbit.FLB_RETRY, "Expected return code to be FLB_RETRY")
 
 	retCode = outputPlugin.Flush()
 	assert.Equal(t, retCode, fluentbit.FLB_OK, "Expected return code to be FLB_OK")

@@ -25,7 +25,6 @@ import (
 
 	"github.com/aws/amazon-kinesis-firehose-for-fluent-bit/plugins"
 	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/credentials/stscreds"
 	"github.com/aws/aws-sdk-go/aws/endpoints"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -133,9 +132,9 @@ func NewOutputPlugin(region, stream, dataKeys, partitionKey, roleARN, endpoint, 
 		timeKey:                      timeKey,
 		fmtStrftime:                  timeFormatter,
 		lastInvalidPartitionKeyIndex: -1,
-		timer:                        timer,
-		PluginID:                     pluginID,
-		random:                       random,
+		timer:    timer,
+		PluginID: pluginID,
+		random:   random,
 	}, nil
 }
 
@@ -262,21 +261,14 @@ func (outputPlugin *OutputPlugin) sendCurrentBatch() (int, error) {
 	}
 	outputPlugin.timer.Check()
 
+	logrus.Debugf("[kinesis %d] Sending %d events to Kinesis\n", outputPlugin.PluginID, len(outputPlugin.records))
 	response, err := outputPlugin.client.PutRecords(&kinesis.PutRecordsInput{
 		Records:    outputPlugin.records,
 		StreamName: aws.String(outputPlugin.stream),
 	})
 	if err != nil {
 		logrus.Errorf("[kinesis %d] PutRecords failed with %v\n", outputPlugin.PluginID, err)
-		outputPlugin.timer.Start()
-		if aerr, ok := err.(awserr.Error); ok {
-			if aerr.Code() == kinesis.ErrCodeProvisionedThroughputExceededException {
-				logrus.Warnf("[kinesis %d] Throughput limits for the stream may have been exceeded.", outputPlugin.PluginID)
-			}
-		}
-		return fluentbit.FLB_RETRY, err
 	}
-	logrus.Debugf("[kinesis %d] Sent %d events to Kinesis\n", outputPlugin.PluginID, len(outputPlugin.records))
 
 	return outputPlugin.processAPIResponse(response)
 }
@@ -284,6 +276,7 @@ func (outputPlugin *OutputPlugin) sendCurrentBatch() (int, error) {
 // processAPIResponse processes the successful and failed records
 // it returns an error iff no records succeeded (i.e.) no progress has been made
 func (outputPlugin *OutputPlugin) processAPIResponse(response *kinesis.PutRecordsOutput) (int, error) {
+	returnCode := fluentbit.FLB_OK
 	if aws.Int64Value(response.FailedRecordCount) > 0 {
 		// start timer if all records failed (no progress has been made)
 		if aws.Int64Value(response.FailedRecordCount) == int64(len(outputPlugin.records)) {
@@ -294,14 +287,11 @@ func (outputPlugin *OutputPlugin) processAPIResponse(response *kinesis.PutRecord
 		logrus.Warnf("[kinesis %d] %d records failed to be delivered. Will retry.\n", outputPlugin.PluginID, aws.Int64Value(response.FailedRecordCount))
 		failedRecords := make([]*kinesis.PutRecordsRequestEntry, 0, aws.Int64Value(response.FailedRecordCount))
 		// try to resend failed records
+		returnCode = fluentbit.FLB_RETRY
 		for i, record := range response.Records {
 			if record.ErrorMessage != nil {
 				logrus.Debugf("[kinesis %d] Record failed to send with error: %s\n", outputPlugin.PluginID, aws.StringValue(record.ErrorMessage))
 				failedRecords = append(failedRecords, outputPlugin.records[i])
-			}
-			if aws.StringValue(record.ErrorCode) == kinesis.ErrCodeProvisionedThroughputExceededException {
-				logrus.Warnf("[kinesis %d] Throughput limits for the stream may have been exceeded.", outputPlugin.PluginID)
-				return fluentbit.FLB_RETRY, nil
 			}
 		}
 
@@ -317,7 +307,7 @@ func (outputPlugin *OutputPlugin) processAPIResponse(response *kinesis.PutRecord
 		outputPlugin.records = outputPlugin.records[:0]
 		outputPlugin.dataLength = 0
 	}
-	return fluentbit.FLB_OK, nil
+	return returnCode, nil
 }
 
 // randomString generates a random string of length 8
