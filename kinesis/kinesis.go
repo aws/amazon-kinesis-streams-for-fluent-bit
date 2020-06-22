@@ -308,6 +308,7 @@ func (outputPlugin *OutputPlugin) FlushConcurrent(count int, records []*kinesis.
 	go outputPlugin.FlushWithRetries(count, records)
 
 	return output.FLB_OK
+
 }
 
 func (outputPlugin *OutputPlugin) processRecord(record map[interface{}]interface{}, partitionKey string) ([]byte, error) {

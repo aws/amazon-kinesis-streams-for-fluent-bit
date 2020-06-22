@@ -210,10 +210,6 @@ func unpackRecords(kinesisOutput *kinesis.OutputPlugin, data unsafe.Pointer, len
 
 //export FLBPluginExit
 func FLBPluginExit() int {
-	// Before final exit, call Flush() for all the instances of the Output Plugin
-	// for i := range pluginInstances {
-	// 	pluginInstances[i].Flush(records)
-	// }
 
 	return output.FLB_OK
 }
