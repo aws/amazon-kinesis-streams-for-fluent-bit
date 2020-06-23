@@ -189,7 +189,7 @@ func (outputPlugin *OutputPlugin) AddRecord(records *[]*kinesis.PutRecordsReques
 		record[outputPlugin.timeKey] = buf.String()
 	}
 
-	partitionKey := outputPlugin.getPartitionKey(*records, record)
+	partitionKey := outputPlugin.getPartitionKey(record)
 	data, err := outputPlugin.processRecord(record, partitionKey)
 	if err != nil {
 		logrus.Errorf("[kinesis %d] %v\n", outputPlugin.PluginID, err)
@@ -424,8 +424,8 @@ func (outputPlugin *OutputPlugin) randomString() string {
 }
 
 // getPartitionKey returns the value for a given valid key
-// if the given key is emapty or invalid, it returns a random string
-func (outputPlugin *OutputPlugin) getPartitionKey(records []*kinesis.PutRecordsRequestEntry, record map[interface{}]interface{}) string {
+// if the given key is empty or invalid, it returns a random string
+func (outputPlugin *OutputPlugin) getPartitionKey(record map[interface{}]interface{}) string {
 	partitionKey := outputPlugin.partitionKey
 	if partitionKey != "" {
 		for k, v := range record {

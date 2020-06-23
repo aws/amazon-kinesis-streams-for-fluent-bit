@@ -31,6 +31,7 @@ import "strconv"
 const (
 	// Kinesis API Limit https://docs.aws.amazon.com/sdk-for-go/api/service/kinesis/#Kinesis.PutRecords
 	maximumRecordsPerPut     = 500
+	maximumConcurrency       = 10
 	defaultConcurrentRetries = 4
 )
 
@@ -105,20 +106,21 @@ func newKinesisOutput(ctx unsafe.Pointer, pluginID int) (*kinesis.OutputPlugin, 
 			return nil, err
 		}
 		if concurrencyInt < 0 {
-			logrus.Errorf("[kinesis %d] Invalid 'concurrency' value (%s) specified, must be a non-negative number", pluginID, concurrency)
-			return nil, err
+			return nil, fmt.Errorf("[kinesis %d] Invalid 'concurrency' value (%s) specified, must be a non-negative number", pluginID, concurrency)
+		}
+
+		if concurrencyInt > maximumConcurrency {
+			return nil, fmt.Errorf("[kinesis %d] Invalid 'concurrency' value (%s) specified, must be less than or equal to %d", pluginID, concurrency, maximumConcurrency)
 		}
 	}
 
 	if concurrencyRetries != "" {
 		concurrencyRetriesInt, err = strconv.Atoi(concurrencyRetries)
 		if err != nil {
-			logrus.Errorf("[kinesis %d] Invalid 'concurrency_retries' value %s specified: %v", pluginID, concurrencyRetries, err)
-			return nil, err
+			return nil, fmt.Errorf("[kinesis %d] Invalid 'concurrency_retries' value (%s) specified: %v", pluginID, concurrencyRetries, err)
 		}
 		if concurrencyRetriesInt < 0 {
-			logrus.Errorf("[kinesis %d] Invalid 'concurrency_retries' value (%s) specified, must be a non-negative number", pluginID, concurrencyRetries)
-			return nil, err
+			return nil, fmt.Errorf("[kinesis %d] Invalid 'concurrency_retries' value (%s) specified, must be a non-negative number", pluginID, concurrencyRetries)
 		}
 	} else {
 		concurrencyRetriesInt = defaultConcurrentRetries
