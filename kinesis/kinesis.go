@@ -77,15 +77,15 @@ type OutputPlugin struct {
 	// Partition key decides in which shard of your stream the data belongs to
 	partitionKey string
 	// Decides whether to append a newline after each data record
-	appendNewline bool
-	timeKey       string
-	fmtStrftime   *strftime.Strftime
-	client        PutRecordsClient
-	timer         *plugins.Timeout
-	PluginID      int
-	random        *random
-	Concurrency   int
-	retryLimit    int
+	appendNewline         bool
+	timeKey               string
+	fmtStrftime           *strftime.Strftime
+	client                PutRecordsClient
+	timer                 *plugins.Timeout
+	PluginID              int
+	random                *random
+	Concurrency           int
+	concurrencyRetryLimit int
 	// Concurrency is the limit, goroutineCount represents the running goroutines
 	goroutineCount int32
 	// Used to implement backoff for concurrent flushes
@@ -128,18 +128,18 @@ func NewOutputPlugin(region, stream, dataKeys, partitionKey, roleARN, endpoint, 
 	}
 
 	return &OutputPlugin{
-		stream:        stream,
-		client:        client,
-		dataKeys:      dataKeys,
-		partitionKey:  partitionKey,
-		appendNewline: appendNewline,
-		timeKey:       timeKey,
-		fmtStrftime:   timeFormatter,
-		timer:         timer,
-		PluginID:      pluginID,
-		random:        random,
-		Concurrency:   concurrency,
-		retryLimit:    retryLimit,
+		stream:                stream,
+		client:                client,
+		dataKeys:              dataKeys,
+		partitionKey:          partitionKey,
+		appendNewline:         appendNewline,
+		timeKey:               timeKey,
+		fmtStrftime:           timeFormatter,
+		timer:                 timer,
+		PluginID:              pluginID,
+		random:                random,
+		Concurrency:           concurrency,
+		concurrencyRetryLimit: retryLimit,
 	}, nil
 }
 
@@ -254,11 +254,11 @@ func (outputPlugin *OutputPlugin) FlushWithRetries(count int, records []*kinesis
 	currentRetries := outputPlugin.getConcurrentRetries()
 	outputPlugin.addGoroutineCount(1)
 
-	for tries = 0; tries < outputPlugin.retryLimit; tries++ {
+	for tries = 0; tries < outputPlugin.concurrencyRetryLimit; tries++ {
 		if currentRetries > 0 {
 			// Wait if other goroutines are retrying, as well as implement a progressive backoff
-			if currentRetries > uint32(outputPlugin.retryLimit) {
-				time.Sleep(time.Duration((1<<uint32(outputPlugin.retryLimit))*100) * time.Millisecond)
+			if currentRetries > uint32(outputPlugin.concurrencyRetryLimit) {
+				time.Sleep(time.Duration((1<<uint32(outputPlugin.concurrencyRetryLimit))*100) * time.Millisecond)
 			} else {
 				time.Sleep(time.Duration((1<<currentRetries)*100) * time.Millisecond)
 			}
@@ -282,7 +282,7 @@ func (outputPlugin *OutputPlugin) FlushWithRetries(count int, records []*kinesis
 	case output.FLB_ERROR:
 		logrus.Errorf("[kinesis %d] Failed to send (%d) records with error", outputPlugin.PluginID, len(records))
 	case output.FLB_RETRY:
-		logrus.Errorf("[kinesis %d] Failed to send (%d) records after retries %d", outputPlugin.PluginID, len(records), outputPlugin.retryLimit)
+		logrus.Errorf("[kinesis %d] Failed to send (%d) records after retries %d", outputPlugin.PluginID, len(records), outputPlugin.concurrencyRetryLimit)
 	case output.FLB_OK:
 		logrus.Debugf("[kinesis %d] Flushed %d records\n", outputPlugin.PluginID, count)
 	}
