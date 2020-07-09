@@ -79,6 +79,8 @@ func newKinesisOutput(ctx unsafe.Pointer, pluginID int) (*kinesis.OutputPlugin, 
 	logrus.Infof("[firehose %d] plugin parameter concurrency = '%s'\n", pluginID, concurrency)
 	concurrencyRetries := output.FLBPluginConfigKey(ctx, "concurrency_retries")
 	logrus.Infof("[firehose %d] plugin parameter concurrency_retries = '%s'\n", pluginID, concurrencyRetries)
+	aggregated := output.FLBPluginConfigKey(ctx, "aggregated")
+	logrus.Infof("[firehose %d] plugin parameter aggregated = '%s'\n", pluginID, aggregated)
 
 	if stream == "" || region == "" {
 		return nil, fmt.Errorf("[kinesis %d] stream and region are required configuration parameters", pluginID)
@@ -111,6 +113,10 @@ func newKinesisOutput(ctx unsafe.Pointer, pluginID int) (*kinesis.OutputPlugin, 
 
 		if concurrencyInt > maximumConcurrency {
 			return nil, fmt.Errorf("[kinesis %d] Invalid 'concurrency' value (%s) specified, must be less than or equal to %d", pluginID, concurrency, maximumConcurrency)
+		}
+
+		if concurrencyInt > 0 {
+			logrus.Warnf("[kinesis %d] WARNING: Enabling concurrency can lead to data loss.  If 'concurrency_retries' is reached data will be lost.", pluginID)
 		}
 	}
 
