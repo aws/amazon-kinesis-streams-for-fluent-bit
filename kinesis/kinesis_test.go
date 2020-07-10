@@ -18,7 +18,6 @@ import (
 
 // newMockOutputPlugin creates an mock OutputPlugin object
 func newMockOutputPlugin(client *mock_kinesis.MockPutRecordsClient) (*OutputPlugin, error) {
-	records := make([]*kinesis.PutRecordsRequestEntry, 0, 500)
 
 	timer, _ := plugins.NewTimeout(func(d time.Duration) {
 		logrus.Errorf("[kinesis] timeout threshold reached: Failed to send logs for %v", d)
@@ -34,15 +33,13 @@ func newMockOutputPlugin(client *mock_kinesis.MockPutRecordsClient) (*OutputPlug
 	}
 
 	return &OutputPlugin{
-		stream:                       "stream",
-		client:                       client,
-		records:                      records,
-		dataKeys:                     "",
-		partitionKey:                 "",
-		lastInvalidPartitionKeyIndex: -1,
-		timer:                        timer,
-		PluginID:                     0,
-		random:                       random,
+		stream:       "stream",
+		client:       client,
+		dataKeys:     "",
+		partitionKey: "",
+		timer:        timer,
+		PluginID:     0,
+		random:       random,
 	}, nil
 }
 
@@ -67,6 +64,8 @@ func TestStringOrByteArray(t *testing.T) {
 }
 
 func TestAddRecord(t *testing.T) {
+	records := make([]*kinesis.PutRecordsRequestEntry, 0, 500)
+
 	record := map[interface{}]interface{}{
 		"testkey": []byte("test value"),
 	}
@@ -74,12 +73,14 @@ func TestAddRecord(t *testing.T) {
 	outputPlugin, _ := newMockOutputPlugin(nil)
 
 	timeStamp := time.Now()
-	retCode := outputPlugin.AddRecord(record, &timeStamp)
+	retCode := outputPlugin.AddRecord(&records, record, &timeStamp)
 	assert.Equal(t, retCode, fluentbit.FLB_OK, "Expected return code to be FLB_OK")
-	assert.Len(t, outputPlugin.records, 1, "Expected output to contain 1 record")
+	assert.Len(t, records, 1, "Expected output to contain 1 record")
 }
 
 func TestAddRecordAndFlush(t *testing.T) {
+	records := make([]*kinesis.PutRecordsRequestEntry, 0, 500)
+
 	record := map[interface{}]interface{}{
 		"testkey": []byte("test value"),
 	}
@@ -94,9 +95,9 @@ func TestAddRecordAndFlush(t *testing.T) {
 	outputPlugin, _ := newMockOutputPlugin(mockKinesis)
 
 	timeStamp := time.Now()
-	retCode := outputPlugin.AddRecord(record, &timeStamp)
+	retCode := outputPlugin.AddRecord(&records, record, &timeStamp)
 	assert.Equal(t, retCode, fluentbit.FLB_OK, "Expected return code to be FLB_OK")
 
-	retCode = outputPlugin.Flush()
+	retCode = outputPlugin.Flush(&records)
 	assert.Equal(t, retCode, fluentbit.FLB_OK, "Expected return code to be FLB_OK")
 }

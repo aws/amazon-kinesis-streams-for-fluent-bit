@@ -16,14 +16,23 @@ package main
 import (
 	"C"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 	"unsafe"
 
 	"github.com/aws/amazon-kinesis-firehose-for-fluent-bit/plugins"
 	"github.com/aws/amazon-kinesis-streams-for-fluent-bit/kinesis"
+	kinesisAPI "github.com/aws/aws-sdk-go/service/kinesis"
 	"github.com/fluent/fluent-bit-go/output"
 	"github.com/sirupsen/logrus"
+)
+
+const (
+	// Kinesis API Limit https://docs.aws.amazon.com/sdk-for-go/api/service/kinesis/#Kinesis.PutRecords
+	maximumRecordsPerPut     = 500
+	maximumConcurrency       = 10
+	defaultConcurrentRetries = 4
 )
 
 var (
@@ -66,6 +75,10 @@ func newKinesisOutput(ctx unsafe.Pointer, pluginID int) (*kinesis.OutputPlugin, 
 	logrus.Infof("[firehose %d] plugin parameter time_key = '%s'\n", pluginID, timeKey)
 	timeKeyFmt := output.FLBPluginConfigKey(ctx, "time_key_format")
 	logrus.Infof("[firehose %d] plugin parameter time_key_format = '%s'\n", pluginID, timeKeyFmt)
+	concurrency := output.FLBPluginConfigKey(ctx, "experimental_concurrency")
+	logrus.Infof("[firehose %d] plugin parameter experimental_concurrency = '%s'\n", pluginID, concurrency)
+	concurrencyRetries := output.FLBPluginConfigKey(ctx, "experimental_concurrency_retries")
+	logrus.Infof("[firehose %d] plugin parameter experimental_concurrency_retries = '%s'\n", pluginID, concurrencyRetries)
 
 	if stream == "" || region == "" {
 		return nil, fmt.Errorf("[kinesis %d] stream and region are required configuration parameters", pluginID)
@@ -83,7 +96,41 @@ func newKinesisOutput(ctx unsafe.Pointer, pluginID int) (*kinesis.OutputPlugin, 
 	if strings.ToLower(appendNewline) == "true" {
 		appendNL = true
 	}
-	return kinesis.NewOutputPlugin(region, stream, dataKeys, partitionKey, roleARN, endpoint, timeKey, timeKeyFmt, appendNL, pluginID)
+
+	var concurrencyInt, concurrencyRetriesInt int
+	var err error
+	if concurrency != "" {
+		concurrencyInt, err = strconv.Atoi(concurrency)
+		if err != nil {
+			logrus.Errorf("[kinesis %d] Invalid 'experimental_concurrency' value %s specified: %v", pluginID, concurrency, err)
+			return nil, err
+		}
+		if concurrencyInt < 0 {
+			return nil, fmt.Errorf("[kinesis %d] Invalid 'experimental_concurrency' value (%s) specified, must be a non-negative number", pluginID, concurrency)
+		}
+
+		if concurrencyInt > maximumConcurrency {
+			return nil, fmt.Errorf("[kinesis %d] Invalid 'experimental_concurrency' value (%s) specified, must be less than or equal to %d", pluginID, concurrency, maximumConcurrency)
+		}
+
+		if concurrencyInt > 0 {
+			logrus.Warnf("[kinesis %d] WARNING: Enabling concurrency can lead to data loss.  If 'experimental_concurrency_retries' is reached data will be lost.", pluginID)
+		}
+	}
+
+	if concurrencyRetries != "" {
+		concurrencyRetriesInt, err = strconv.Atoi(concurrencyRetries)
+		if err != nil {
+			return nil, fmt.Errorf("[kinesis %d] Invalid 'experimental_concurrency_retries' value (%s) specified: %v", pluginID, concurrencyRetries, err)
+		}
+		if concurrencyRetriesInt < 0 {
+			return nil, fmt.Errorf("[kinesis %d] Invalid 'experimental_concurrency_retries' value (%s) specified, must be a non-negative number", pluginID, concurrencyRetries)
+		}
+	} else {
+		concurrencyRetriesInt = defaultConcurrentRetries
+	}
+
+	return kinesis.NewOutputPlugin(region, stream, dataKeys, partitionKey, roleARN, endpoint, timeKey, timeKeyFmt, concurrencyInt, concurrencyRetriesInt, appendNL, pluginID)
 }
 
 // The "export" comments have syntactic meaning
@@ -107,18 +154,36 @@ func FLBPluginInit(ctx unsafe.Pointer) int {
 
 //export FLBPluginFlushCtx
 func FLBPluginFlushCtx(ctx, data unsafe.Pointer, length C.int, tag *C.char) int {
-	var count int
+	kinesisOutput := getPluginInstance(ctx)
+
+	fluentTag := C.GoString(tag)
+
+	events, count, retCode := unpackRecords(kinesisOutput, data, length)
+	if retCode != output.FLB_OK {
+		logrus.Errorf("[kinesis %d] failed to unpackRecords with tag: %s\n", kinesisOutput.PluginID, fluentTag)
+
+		return retCode
+	}
+
+	logrus.Debugf("[kinesis %d] Flushing %d logs with tag: %s\n", kinesisOutput.PluginID, count, fluentTag)
+	if kinesisOutput.Concurrency > 0 {
+		return kinesisOutput.FlushConcurrent(count, events)
+	}
+
+	return kinesisOutput.Flush(&events)
+}
+
+func unpackRecords(kinesisOutput *kinesis.OutputPlugin, data unsafe.Pointer, length C.int) ([]*kinesisAPI.PutRecordsRequestEntry, int, int) {
 	var ret int
 	var ts interface{}
 	var timestamp time.Time
 	var record map[interface{}]interface{}
+	count := 0
+
+	records := make([]*kinesisAPI.PutRecordsRequestEntry, 0, maximumRecordsPerPut)
 
 	// Create Fluent Bit decoder
 	dec := output.NewDecoder(data, int(length))
-
-	kinesisOutput := getPluginInstance(ctx)
-	fluentTag := C.GoString(tag)
-	logrus.Debugf("[kinesis %d] Found logs with tag: %s\n", kinesisOutput.PluginID, fluentTag)
 
 	for {
 		//Extract Record
@@ -138,27 +203,19 @@ func FLBPluginFlushCtx(ctx, data unsafe.Pointer, length C.int, tag *C.char) int 
 			timestamp = time.Now()
 		}
 
-		retCode := kinesisOutput.AddRecord(record, &timestamp)
+		retCode := kinesisOutput.AddRecord(&records, record, &timestamp)
 		if retCode != output.FLB_OK {
-			return retCode
+			return nil, 0, retCode
 		}
+
 		count++
 	}
-	retCode := kinesisOutput.Flush()
-	if retCode != output.FLB_OK {
-		return retCode
-	}
-	logrus.Debugf("[kinesis %d] Processed %d events with tag %s\n", kinesisOutput.PluginID, count, fluentTag)
 
-	return output.FLB_OK
+	return records, count, output.FLB_OK
 }
 
 //export FLBPluginExit
 func FLBPluginExit() int {
-	// Before final exit, call Flush() for all the instances of the Output Plugin
-	for i := range pluginInstances {
-		pluginInstances[i].Flush()
-	}
 
 	return output.FLB_OK
 }

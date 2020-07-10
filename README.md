@@ -16,7 +16,9 @@ If you think you’ve found a potential security issue, please do not post it in
 * `endpoint`: Specify a custom endpoint for the Kinesis Streams API.
 * `append_newline`: If you set append_newline as true, a newline will be addded after each log record.
 * `time_key`: Add the timestamp to the record under this key. By default the timestamp from Fluent Bit will not be added to records sent to Kinesis.
-* `time_key_format`: [strftime](http://man7.org/linux/man-pages/man3/strftime.3.html) compliant format string for the timestamp; for example, `%Y-%m-%dT%H:%M:%S%z`. This option is used with `time_key`. 
+* `time_key_format`: [strftime](http://man7.org/linux/man-pages/man3/strftime.3.html) compliant format string for the timestamp; for example, `%Y-%m-%dT%H:%M:%S%z`. This option is used with `time_key`.
+* `experimental_concurrency`: Specify a limit of concurrent go routines for flushing records to kinesis.  By default `experimental_concurrency` is set to 0 and records are flushed in Fluent Bit's single thread. This means that requests to Kinesis will block the execution of Fluent Bit.  If this value is set to `4` for example then calls to Flush records from fluentbit will spawn concurrent go routines until the limit of `4` concurrent go routines are running.  Once the `experimental_concurrency` limit is reached calls to Flush will return a retry code.  The upper limit of the `experimental_concurrency` option is `10`.  WARNING:  Enabling `experimental_concurrency` can lead to data loss if the retry count is reached.  Enabling concurrency will increase resource usage (memory and CPU).
+* `experimental_concurrency_retries`: Specify a limit to the number of retries concurrent goroutines will attempt.  By default `4` retries will be attempted before records are dropped.
 
 ### Permissions
 
