@@ -75,12 +75,10 @@ func newKinesisOutput(ctx unsafe.Pointer, pluginID int) (*kinesis.OutputPlugin, 
 	logrus.Infof("[firehose %d] plugin parameter time_key = '%s'\n", pluginID, timeKey)
 	timeKeyFmt := output.FLBPluginConfigKey(ctx, "time_key_format")
 	logrus.Infof("[firehose %d] plugin parameter time_key_format = '%s'\n", pluginID, timeKeyFmt)
-	concurrency := output.FLBPluginConfigKey(ctx, "concurrency")
-	logrus.Infof("[firehose %d] plugin parameter concurrency = '%s'\n", pluginID, concurrency)
-	concurrencyRetries := output.FLBPluginConfigKey(ctx, "concurrency_retries")
-	logrus.Infof("[firehose %d] plugin parameter concurrency_retries = '%s'\n", pluginID, concurrencyRetries)
-	aggregated := output.FLBPluginConfigKey(ctx, "aggregated")
-	logrus.Infof("[firehose %d] plugin parameter aggregated = '%s'\n", pluginID, aggregated)
+	concurrency := output.FLBPluginConfigKey(ctx, "experimental_concurrency")
+	logrus.Infof("[firehose %d] plugin parameter experimental_concurrency = '%s'\n", pluginID, concurrency)
+	concurrencyRetries := output.FLBPluginConfigKey(ctx, "experimental_concurrency_retries")
+	logrus.Infof("[firehose %d] plugin parameter experimental_concurrency_retries = '%s'\n", pluginID, concurrencyRetries)
 
 	if stream == "" || region == "" {
 		return nil, fmt.Errorf("[kinesis %d] stream and region are required configuration parameters", pluginID)
@@ -104,29 +102,29 @@ func newKinesisOutput(ctx unsafe.Pointer, pluginID int) (*kinesis.OutputPlugin, 
 	if concurrency != "" {
 		concurrencyInt, err = strconv.Atoi(concurrency)
 		if err != nil {
-			logrus.Errorf("[kinesis %d] Invalid 'concurrency' value %s specified: %v", pluginID, concurrency, err)
+			logrus.Errorf("[kinesis %d] Invalid 'experimental_concurrency' value %s specified: %v", pluginID, concurrency, err)
 			return nil, err
 		}
 		if concurrencyInt < 0 {
-			return nil, fmt.Errorf("[kinesis %d] Invalid 'concurrency' value (%s) specified, must be a non-negative number", pluginID, concurrency)
+			return nil, fmt.Errorf("[kinesis %d] Invalid 'experimental_concurrency' value (%s) specified, must be a non-negative number", pluginID, concurrency)
 		}
 
 		if concurrencyInt > maximumConcurrency {
-			return nil, fmt.Errorf("[kinesis %d] Invalid 'concurrency' value (%s) specified, must be less than or equal to %d", pluginID, concurrency, maximumConcurrency)
+			return nil, fmt.Errorf("[kinesis %d] Invalid 'experimental_concurrency' value (%s) specified, must be less than or equal to %d", pluginID, concurrency, maximumConcurrency)
 		}
 
 		if concurrencyInt > 0 {
-			logrus.Warnf("[kinesis %d] WARNING: Enabling concurrency can lead to data loss.  If 'concurrency_retries' is reached data will be lost.", pluginID)
+			logrus.Warnf("[kinesis %d] WARNING: Enabling concurrency can lead to data loss.  If 'experimental_concurrency_retries' is reached data will be lost.", pluginID)
 		}
 	}
 
 	if concurrencyRetries != "" {
 		concurrencyRetriesInt, err = strconv.Atoi(concurrencyRetries)
 		if err != nil {
-			return nil, fmt.Errorf("[kinesis %d] Invalid 'concurrency_retries' value (%s) specified: %v", pluginID, concurrencyRetries, err)
+			return nil, fmt.Errorf("[kinesis %d] Invalid 'experimental_concurrency_retries' value (%s) specified: %v", pluginID, concurrencyRetries, err)
 		}
 		if concurrencyRetriesInt < 0 {
-			return nil, fmt.Errorf("[kinesis %d] Invalid 'concurrency_retries' value (%s) specified, must be a non-negative number", pluginID, concurrencyRetries)
+			return nil, fmt.Errorf("[kinesis %d] Invalid 'experimental_concurrency_retries' value (%s) specified, must be a non-negative number", pluginID, concurrencyRetries)
 		}
 	} else {
 		concurrencyRetriesInt = defaultConcurrentRetries
