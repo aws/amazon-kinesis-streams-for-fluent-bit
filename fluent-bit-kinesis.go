@@ -16,6 +16,7 @@ package main
 import (
 	"C"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 	"unsafe"
@@ -26,7 +27,6 @@ import (
 	"github.com/fluent/fluent-bit-go/output"
 	"github.com/sirupsen/logrus"
 )
-import "strconv"
 
 const (
 	// Kinesis API Limit https://docs.aws.amazon.com/sdk-for-go/api/service/kinesis/#Kinesis.PutRecords
