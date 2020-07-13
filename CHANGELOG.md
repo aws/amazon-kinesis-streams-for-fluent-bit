@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.3.0
+* Feature - Add experimental concurrency feature (#33)
+
 ## 1.2.2
 * Bug - Remove exponential backoff code (#27)
 
