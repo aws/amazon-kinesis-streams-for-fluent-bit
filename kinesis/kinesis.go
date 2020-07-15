@@ -93,8 +93,8 @@ type OutputPlugin struct {
 }
 
 // NewOutputPlugin creates an OutputPlugin object
-func NewOutputPlugin(region, stream, dataKeys, partitionKey, roleARN, endpoint, timeKey, timeFmt string, concurrency, retryLimit int, appendNewline bool, pluginID int) (*OutputPlugin, error) {
-	client, err := newPutRecordsClient(roleARN, region, endpoint)
+func NewOutputPlugin(region, stream, dataKeys, partitionKey, roleARN, kinesisEndpoint, stsEndpoint, timeKey, timeFmt string, concurrency, retryLimit int, appendNewline bool, pluginID int) (*OutputPlugin, error) {
+	client, err := newPutRecordsClient(roleARN, region, kinesisEndpoint, stsEndpoint)
 	if err != nil {
 		return nil, err
 	}
@@ -144,28 +144,31 @@ func NewOutputPlugin(region, stream, dataKeys, partitionKey, roleARN, endpoint, 
 }
 
 // newPutRecordsClient creates the Kinesis client for calling the PutRecords method
-func newPutRecordsClient(roleARN string, awsRegion string, endpoint string) (*kinesis.Kinesis, error) {
+func newPutRecordsClient(roleARN string, awsRegion string, kinesisEndpoint string, stsEndpoint string) (*kinesis.Kinesis, error) {
+	defaultResolver := endpoints.DefaultResolver()
+	customResolverFn := func(service, region string, optFns ...func(*endpoints.Options)) (endpoints.ResolvedEndpoint, error) {
+		if service == endpoints.KinesisServiceID && kinesisEndpoint != "" {
+			return endpoints.ResolvedEndpoint{
+				URL: kinesisEndpoint,
+			}, nil
+		} else if service == endpoints.StsServiceID && stsEndpoint != "" {
+			return endpoints.ResolvedEndpoint{
+				URL: stsEndpoint,
+			}, nil
+		}
+		return defaultResolver.EndpointFor(service, region, optFns...)
+	}
+
 	sess, err := session.NewSession(&aws.Config{
-		Region: aws.String(awsRegion),
+		Region:                        aws.String(awsRegion),
+		EndpointResolver:              endpoints.ResolverFunc(customResolverFn),
+		CredentialsChainVerboseErrors: aws.Bool(true),
 	})
 	if err != nil {
 		return nil, err
 	}
 
 	svcConfig := &aws.Config{}
-	if endpoint != "" {
-		defaultResolver := endpoints.DefaultResolver()
-		cwCustomResolverFn := func(service, region string, optFns ...func(*endpoints.Options)) (endpoints.ResolvedEndpoint, error) {
-			if service == "kinesis" {
-				return endpoints.ResolvedEndpoint{
-					URL: endpoint,
-				}, nil
-			}
-			return defaultResolver.EndpointFor(service, region, optFns...)
-		}
-		svcConfig.EndpointResolver = endpoints.ResolverFunc(cwCustomResolverFn)
-	}
-
 	if roleARN != "" {
 		creds := stscreds.NewCredentials(sess, roleARN)
 		svcConfig.Credentials = creds

@@ -67,8 +67,10 @@ func newKinesisOutput(ctx unsafe.Pointer, pluginID int) (*kinesis.OutputPlugin, 
 	logrus.Infof("[kinesis %d] plugin parameter partition_key = '%s'", pluginID, partitionKey)
 	roleARN := output.FLBPluginConfigKey(ctx, "role_arn")
 	logrus.Infof("[kinesis %d] plugin parameter role_arn = '%s'", pluginID, roleARN)
-	endpoint := output.FLBPluginConfigKey(ctx, "endpoint")
-	logrus.Infof("[kinesis %d] plugin parameter endpoint = '%s'", pluginID, endpoint)
+	kinesisEndpoint := output.FLBPluginConfigKey(ctx, "endpoint")
+	logrus.Infof("[kinesis %d] plugin parameter endpoint = '%s'", pluginID, kinesisEndpoint)
+	stsEndpoint := output.FLBPluginConfigKey(ctx, "sts_endpoint")
+	logrus.Infof("[kinesis %d] plugin parameter sts_endpoint = '%s'", pluginID, stsEndpoint)
 	appendNewline := output.FLBPluginConfigKey(ctx, "append_newline")
 	logrus.Infof("[kinesis %d] plugin parameter append_newline = %s", pluginID, appendNewline)
 	timeKey := output.FLBPluginConfigKey(ctx, "time_key")
@@ -130,7 +132,7 @@ func newKinesisOutput(ctx unsafe.Pointer, pluginID int) (*kinesis.OutputPlugin, 
 		concurrencyRetriesInt = defaultConcurrentRetries
 	}
 
-	return kinesis.NewOutputPlugin(region, stream, dataKeys, partitionKey, roleARN, endpoint, timeKey, timeKeyFmt, concurrencyInt, concurrencyRetriesInt, appendNL, pluginID)
+	return kinesis.NewOutputPlugin(region, stream, dataKeys, partitionKey, roleARN, kinesisEndpoint, stsEndpoint, timeKey, timeKeyFmt, concurrencyInt, concurrencyRetriesInt, appendNL, pluginID)
 }
 
 // The "export" comments have syntactic meaning
