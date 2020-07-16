@@ -145,7 +145,6 @@ func NewOutputPlugin(region, stream, dataKeys, partitionKey, roleARN, kinesisEnd
 
 // newPutRecordsClient creates the Kinesis client for calling the PutRecords method
 func newPutRecordsClient(roleARN string, awsRegion string, kinesisEndpoint string, stsEndpoint string) (*kinesis.Kinesis, error) {
-	defaultResolver := endpoints.DefaultResolver()
 	customResolverFn := func(service, region string, optFns ...func(*endpoints.Options)) (endpoints.ResolvedEndpoint, error) {
 		if service == endpoints.KinesisServiceID && kinesisEndpoint != "" {
 			return endpoints.ResolvedEndpoint{
@@ -156,7 +155,7 @@ func newPutRecordsClient(roleARN string, awsRegion string, kinesisEndpoint strin
 				URL: stsEndpoint,
 			}, nil
 		}
-		return defaultResolver.EndpointFor(service, region, optFns...)
+		return endpoints.DefaultResolver().EndpointFor(service, region, optFns...)
 	}
 
 	sess, err := session.NewSession(&aws.Config{
