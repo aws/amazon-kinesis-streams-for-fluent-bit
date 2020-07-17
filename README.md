@@ -1,3 +1,4 @@
+[![Test Actions Status](https://github.com/aws/amazon-kinesis-streams-for-fluent-bit/workflows/Build/badge.svg)](https://github.com/aws/amazon-kinesis-streams-for-fluent-bit/actions)
 ## Fluent Bit Plugin for Amazon Kinesis Data Streams
 
 A Fluent Bit output plugin for Amazon Kinesis Data Streams.
