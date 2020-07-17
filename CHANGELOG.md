@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.4.0
+* Feature - Add sts_endpoint param for custom STS API endpoint (#39)
+
 ## 1.3.0
 * Feature - Add experimental concurrency feature (#33)
 
