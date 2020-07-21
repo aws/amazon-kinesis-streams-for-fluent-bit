@@ -10,5 +10,5 @@ require (
 	github.com/json-iterator/go v1.1.10
 	github.com/lestrrat-go/strftime v1.0.2-0.20200618102204-1b0bc59fa4ab
 	github.com/sirupsen/logrus v1.6.0
-	github.com/stretchr/testify v1.3.0
+	github.com/stretchr/testify v1.6.1
 )
