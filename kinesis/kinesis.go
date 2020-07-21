@@ -80,6 +80,7 @@ type OutputPlugin struct {
 	appendNewline         bool
 	timeKey               string
 	fmtStrftime           *strftime.Strftime
+	logKey                string
 	client                PutRecordsClient
 	timer                 *plugins.Timeout
 	PluginID              int
@@ -93,7 +94,7 @@ type OutputPlugin struct {
 }
 
 // NewOutputPlugin creates an OutputPlugin object
-func NewOutputPlugin(region, stream, dataKeys, partitionKey, roleARN, kinesisEndpoint, stsEndpoint, timeKey, timeFmt string, concurrency, retryLimit int, appendNewline bool, pluginID int) (*OutputPlugin, error) {
+func NewOutputPlugin(region, stream, dataKeys, partitionKey, roleARN, kinesisEndpoint, stsEndpoint, timeKey, timeFmt, logKey string, concurrency, retryLimit int, appendNewline bool, pluginID int) (*OutputPlugin, error) {
 	client, err := newPutRecordsClient(roleARN, region, kinesisEndpoint, stsEndpoint)
 	if err != nil {
 		return nil, err
@@ -135,6 +136,7 @@ func NewOutputPlugin(region, stream, dataKeys, partitionKey, roleARN, kinesisEnd
 		appendNewline:         appendNewline,
 		timeKey:               timeKey,
 		fmtStrftime:           timeFormatter,
+		logKey:                logKey,
 		timer:                 timer,
 		PluginID:              pluginID,
 		random:                random,
@@ -326,7 +328,19 @@ func (outputPlugin *OutputPlugin) processRecord(record map[interface{}]interface
 	}
 
 	var json = jsoniter.ConfigCompatibleWithStandardLibrary
-	data, err := json.Marshal(record)
+	var data []byte
+
+	if outputPlugin.logKey != "" {
+		log, err := plugins.LogKey(record, outputPlugin.logKey)
+		if err != nil {
+			return nil, err
+		}
+
+		data, err = plugins.EncodeLogKey(log)
+	} else {
+		data, err = json.Marshal(record)
+	}
+
 	if err != nil {
 		logrus.Debugf("[kinesis %d] Failed to marshal record: %v\n", outputPlugin.PluginID, record)
 		return nil, err
