@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.5.0
+* Feature - Add log_key option for kinesis output plugin (#40)
+
 ## 1.4.0
 * Feature - Add sts_endpoint param for custom STS API endpoint (#39)
 
