@@ -15,12 +15,13 @@ all: build
 
 SOURCES := $(shell find . -name '*.go')
 PLUGIN_BINARY := ./bin/kinesis.so
+PLUGIN_VERSION := $(shell cat VERSION)
 
 .PHONY: release
 release:
 	mkdir -p ./bin
 	go build -buildmode c-shared -o ./bin/kinesis.so ./
-	@echo "Built Amazon Kinesis Data Streams Fluent Bit Plugin"
+	@echo "Built Amazon Kinesis Data Streams Fluent Bit Plugin v$(PLUGIN_VERSION)"
 
 .PHONY: build
 build: $(PLUGIN_BINARY) release
