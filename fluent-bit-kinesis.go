@@ -74,13 +74,15 @@ func newKinesisOutput(ctx unsafe.Pointer, pluginID int) (*kinesis.OutputPlugin, 
 	appendNewline := output.FLBPluginConfigKey(ctx, "append_newline")
 	logrus.Infof("[kinesis %d] plugin parameter append_newline = %s", pluginID, appendNewline)
 	timeKey := output.FLBPluginConfigKey(ctx, "time_key")
-	logrus.Infof("[firehose %d] plugin parameter time_key = '%s'\n", pluginID, timeKey)
+	logrus.Infof("[kinesis %d] plugin parameter time_key = '%s'", pluginID, timeKey)
 	timeKeyFmt := output.FLBPluginConfigKey(ctx, "time_key_format")
-	logrus.Infof("[firehose %d] plugin parameter time_key_format = '%s'\n", pluginID, timeKeyFmt)
+	logrus.Infof("[kinesis %d] plugin parameter time_key_format = '%s'", pluginID, timeKeyFmt)
 	concurrency := output.FLBPluginConfigKey(ctx, "experimental_concurrency")
-	logrus.Infof("[firehose %d] plugin parameter experimental_concurrency = '%s'\n", pluginID, concurrency)
+	logrus.Infof("[kinesis %d] plugin parameter experimental_concurrency = '%s'", pluginID, concurrency)
 	concurrencyRetries := output.FLBPluginConfigKey(ctx, "experimental_concurrency_retries")
-	logrus.Infof("[firehose %d] plugin parameter experimental_concurrency_retries = '%s'\n", pluginID, concurrencyRetries)
+	logrus.Infof("[kinesis %d] plugin parameter experimental_concurrency_retries = '%s'", pluginID, concurrencyRetries)
+	logKey := output.FLBPluginConfigKey(ctx, "log_key")
+	logrus.Infof("[kinesis %d] plugin parameter log_key = '%s'", pluginID, logKey)
 
 	if stream == "" || region == "" {
 		return nil, fmt.Errorf("[kinesis %d] stream and region are required configuration parameters", pluginID)
@@ -132,7 +134,7 @@ func newKinesisOutput(ctx unsafe.Pointer, pluginID int) (*kinesis.OutputPlugin, 
 		concurrencyRetriesInt = defaultConcurrentRetries
 	}
 
-	return kinesis.NewOutputPlugin(region, stream, dataKeys, partitionKey, roleARN, kinesisEndpoint, stsEndpoint, timeKey, timeKeyFmt, concurrencyInt, concurrencyRetriesInt, appendNL, pluginID)
+	return kinesis.NewOutputPlugin(region, stream, dataKeys, partitionKey, roleARN, kinesisEndpoint, stsEndpoint, timeKey, timeKeyFmt, logKey, concurrencyInt, concurrencyRetriesInt, appendNL, pluginID)
 }
 
 // The "export" comments have syntactic meaning
