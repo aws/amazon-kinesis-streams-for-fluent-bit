@@ -97,7 +97,7 @@ func (a *Aggregator) AggregateRecords() (entry *kinesis.PutRecordsRequestEntry, 
 
 	protoBufData, err := proto.Marshal(agg)
 	if err != nil {
-		logrus.Errorf("Failed to encode record:", err)
+		logrus.Errorf("Failed to encode record: %v", err)
 		return nil, err
 	}
 
