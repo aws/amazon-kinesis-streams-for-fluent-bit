@@ -79,3 +79,32 @@ aws ssm get-parameters-by-path --path /aws/service/aws-for-fluent-bit/
 ```
 
 For more see [our docs](https://github.com/aws/aws-for-fluent-bit#public-images).
+
+
+### KPL aggregation
+
+KPL aggregation can be enabled by setting the `aggregation` parameter to `true` (default is false).  With aggregation enabled records will be serialized into the KCL protobuf structure containing a batch of records before being sent via PutRecords.  This batch of records will only count as a single record towards the Kinesis records per second limit (currently 1000 records/sec per shard).
+
+The advantages of enabling KPL aggregation are:
+
+ - Increased throughput, and decreased Kinesis costs for smaller records (records less than 1K).
+ - Less overhead in error checking PutRecords results (fewer PutRecords results to verify).
+ - Firehose will de-aggregate the records automatically (free de-aggregation if Firehose is leveraged).
+
+The disadvantages are:
+ - The flush time (or buffer size) will need to be tuned to take advantage of aggregation (more on that below).
+ - You must use the KCL library to read data from kinesis to de-aggregate the protobuf serialization (if Firehose isn't the consumer).
+ - The `partition_key` feature isn't fully compatible with aggregation given multiple records are in each PutRecord structure.
+
+KPL Aggregated Record Reference:  https://github.com/awslabs/amazon-kinesis-producer/blob/master/aggregation-format.md
+
+#### Tuning for aggregation
+
+When using `aggregation` the buffers and flush time may need to be tuned.  For low volume use cases a longer flush time maybe preferable to take full advantage of the aggregation cost savings.
+
+More specifically, increasing the flush value will ensure the most records are aggregated taking full advantage of the cost savings.
+
+```
+[SERVICE]
+     Flush 20
+```
