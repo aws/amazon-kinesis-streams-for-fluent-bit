@@ -108,6 +108,10 @@ func newKinesisOutput(ctx unsafe.Pointer, pluginID int) (*kinesis.OutputPlugin, 
 		isAggregate = true
 	}
 
+	if isAggregate && partitionKey != "" {
+		logrus.Errorf("[kinesis %d]  WARNING: The options 'aggregation' and  'partition_key' should not be used in simaltaniously", pluginID)
+	}
+
 	var concurrencyInt, concurrencyRetriesInt int
 	var err error
 	if concurrency != "" {
