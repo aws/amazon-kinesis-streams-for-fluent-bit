@@ -108,3 +108,24 @@ More specifically, increasing the flush value will ensure the most records are a
 [SERVICE]
      Flush 20
 ```
+
+
+### Example Fluent Bit Aggregation Config File
+
+```
+[SERVICE]
+     Flush 20
+
+[INPUT]
+    Name        forward
+    Listen      0.0.0.0
+    Port        24224
+
+[OUTPUT]
+    Name            kinesis
+    Match           *
+    region          us-west-2
+    stream          my-kinesis-stream-name
+    aggregation     true
+    append_newline  true
+```
