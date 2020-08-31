@@ -83,6 +83,8 @@ func newKinesisOutput(ctx unsafe.Pointer, pluginID int) (*kinesis.OutputPlugin, 
 	logrus.Infof("[kinesis %d] plugin parameter experimental_concurrency_retries = '%s'", pluginID, concurrencyRetries)
 	logKey := output.FLBPluginConfigKey(ctx, "log_key")
 	logrus.Infof("[kinesis %d] plugin parameter log_key = '%s'", pluginID, logKey)
+	aggregation := output.FLBPluginConfigKey(ctx, "aggregation")
+	logrus.Infof("[kinesis %d] plugin parameter aggregation = %s", pluginID, aggregation)
 
 	if stream == "" || region == "" {
 		return nil, fmt.Errorf("[kinesis %d] stream and region are required configuration parameters", pluginID)
@@ -99,6 +101,15 @@ func newKinesisOutput(ctx unsafe.Pointer, pluginID int) (*kinesis.OutputPlugin, 
 	appendNL := false
 	if strings.ToLower(appendNewline) == "true" {
 		appendNL = true
+	}
+
+	isAggregate := false
+	if strings.ToLower(aggregation) == "true" {
+		isAggregate = true
+	}
+
+	if isAggregate && partitionKey != "" {
+		logrus.Errorf("[kinesis %d]  WARNING: The options 'aggregation' and  'partition_key' should not be used simaltaniously", pluginID)
 	}
 
 	var concurrencyInt, concurrencyRetriesInt int
@@ -134,7 +145,7 @@ func newKinesisOutput(ctx unsafe.Pointer, pluginID int) (*kinesis.OutputPlugin, 
 		concurrencyRetriesInt = defaultConcurrentRetries
 	}
 
-	return kinesis.NewOutputPlugin(region, stream, dataKeys, partitionKey, roleARN, kinesisEndpoint, stsEndpoint, timeKey, timeKeyFmt, logKey, concurrencyInt, concurrencyRetriesInt, appendNL, pluginID)
+	return kinesis.NewOutputPlugin(region, stream, dataKeys, partitionKey, roleARN, kinesisEndpoint, stsEndpoint, timeKey, timeKeyFmt, logKey, concurrencyInt, concurrencyRetriesInt, isAggregate, appendNL, pluginID)
 }
 
 // The "export" comments have syntactic meaning
@@ -213,6 +224,13 @@ func unpackRecords(kinesisOutput *kinesis.OutputPlugin, data unsafe.Pointer, len
 		}
 
 		count++
+	}
+
+	if kinesisOutput.IsAggregate() {
+		retCode := kinesisOutput.FlushAggregatedRecords(&records)
+		if retCode != output.FLB_OK {
+			return nil, 0, retCode
+		}
 	}
 
 	return records, count, output.FLB_OK

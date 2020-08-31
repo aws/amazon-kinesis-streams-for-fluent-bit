@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/aws/amazon-kinesis-firehose-for-fluent-bit/plugins"
+	"github.com/aws/amazon-kinesis-streams-for-fluent-bit/aggregate"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/credentials/stscreds"
@@ -90,11 +91,14 @@ type OutputPlugin struct {
 	// Concurrency is the limit, goroutineCount represents the running goroutines
 	goroutineCount int32
 	// Used to implement backoff for concurrent flushes
-	concurrentRetries uint32
+	concurrentRetries     uint32
+	isAggregate           bool
+	aggregator            *aggregate.Aggregator
+	aggregatePartitionKey string
 }
 
 // NewOutputPlugin creates an OutputPlugin object
-func NewOutputPlugin(region, stream, dataKeys, partitionKey, roleARN, kinesisEndpoint, stsEndpoint, timeKey, timeFmt, logKey string, concurrency, retryLimit int, appendNewline bool, pluginID int) (*OutputPlugin, error) {
+func NewOutputPlugin(region, stream, dataKeys, partitionKey, roleARN, kinesisEndpoint, stsEndpoint, timeKey, timeFmt, logKey string, concurrency, retryLimit int, isAggregate, appendNewline bool, pluginID int) (*OutputPlugin, error) {
 	client, err := newPutRecordsClient(roleARN, region, kinesisEndpoint, stsEndpoint)
 	if err != nil {
 		return nil, err
@@ -128,6 +132,11 @@ func NewOutputPlugin(region, stream, dataKeys, partitionKey, roleARN, kinesisEnd
 		}
 	}
 
+	var aggregator *aggregate.Aggregator
+	if isAggregate {
+		aggregator = aggregate.NewAggregator()
+	}
+
 	return &OutputPlugin{
 		stream:                stream,
 		client:                client,
@@ -142,6 +151,8 @@ func NewOutputPlugin(region, stream, dataKeys, partitionKey, roleARN, kinesisEnd
 		random:                random,
 		Concurrency:           concurrency,
 		concurrencyRetryLimit: retryLimit,
+		isAggregate:           isAggregate,
+		aggregator:            aggregator,
 	}, nil
 }
 
@@ -201,10 +212,45 @@ func (outputPlugin *OutputPlugin) AddRecord(records *[]*kinesis.PutRecordsReques
 		return fluentbit.FLB_OK
 	}
 
-	*records = append(*records, &kinesis.PutRecordsRequestEntry{
-		Data:         data,
-		PartitionKey: aws.String(partitionKey),
-	})
+	if !outputPlugin.isAggregate {
+		*records = append(*records, &kinesis.PutRecordsRequestEntry{
+			Data:         data,
+			PartitionKey: aws.String(partitionKey),
+		})
+	} else {
+		// Use the KPL aggregator to buffer records isAggregate is true
+		aggRecord, err := outputPlugin.aggregator.AddRecord(partitionKey, data)
+		if err != nil {
+			logrus.Errorf("[kinesis %d] Failed to aggregate record %v\n", outputPlugin.PluginID, err)
+			// discard this single bad record instead and let the batch continue
+			return fluentbit.FLB_OK
+		}
+
+		// If aggRecord isn't nil, then a full kinesis record has been aggregated
+		if aggRecord != nil {
+			*records = append(*records, aggRecord)
+			outputPlugin.aggregatePartitionKey = outputPlugin.randomString()
+		}
+	}
+
+	return fluentbit.FLB_OK
+}
+
+// FlushAggregatedRecords must be called after
+// Returns FLB_OK, FLB_RETRY, FLB_ERROR
+func (outputPlugin *OutputPlugin) FlushAggregatedRecords(records *[]*kinesis.PutRecordsRequestEntry) int {
+
+	aggRecord, err := outputPlugin.aggregator.AggregateRecords()
+	if err != nil {
+		logrus.Errorf("[kinesis %d] Failed to aggregate record %v\n", outputPlugin.PluginID, err)
+		return fluentbit.FLB_ERROR
+	}
+
+	if aggRecord != nil {
+		*records = append(*records, aggRecord)
+		outputPlugin.aggregatePartitionKey = outputPlugin.randomString()
+	}
+
 	return fluentbit.FLB_OK
 }
 
@@ -457,6 +503,12 @@ func (outputPlugin *OutputPlugin) getPartitionKey(record map[interface{}]interfa
 			}
 		}
 	}
+	if outputPlugin.isAggregate {
+		if outputPlugin.aggregatePartitionKey == "" {
+			outputPlugin.aggregatePartitionKey = outputPlugin.randomString()
+		}
+		return outputPlugin.aggregatePartitionKey
+	}
 	return outputPlugin.randomString()
 }
 
@@ -490,4 +542,9 @@ func (outputPlugin *OutputPlugin) getGoroutineCount() int32 {
 // addConcurrentRetries will update the value (goroutine safe)
 func (outputPlugin *OutputPlugin) addGoroutineCount(val int) int32 {
 	return atomic.AddInt32(&outputPlugin.goroutineCount, int32(val))
+}
+
+// IsAggregate indicates if this instance of the plugin has KCL aggregation enabled.
+func (outputPlugin *OutputPlugin) IsAggregate() bool {
+	return outputPlugin.isAggregate
 }
