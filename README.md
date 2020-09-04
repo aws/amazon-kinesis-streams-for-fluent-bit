@@ -23,6 +23,7 @@ If you think you’ve found a potential security issue, please do not post it in
 * `experimental_concurrency`: Specify a limit of concurrent go routines for flushing records to kinesis.  By default `experimental_concurrency` is set to 0 and records are flushed in Fluent Bit's single thread. This means that requests to Kinesis will block the execution of Fluent Bit.  If this value is set to `4` for example then calls to Flush records from fluentbit will spawn concurrent go routines until the limit of `4` concurrent go routines are running.  Once the `experimental_concurrency` limit is reached calls to Flush will return a retry code.  The upper limit of the `experimental_concurrency` option is `10`.  WARNING:  Enabling `experimental_concurrency` can lead to data loss if the retry count is reached.  Enabling concurrency will increase resource usage (memory and CPU).
 * `experimental_concurrency_retries`: Specify a limit to the number of retries concurrent goroutines will attempt.  By default `4` retries will be attempted before records are dropped.
 * `aggregation`: Setting `aggregation` to `true` will enable KPL aggregation of records sent to Kinesis.  This feature isn't compatible with the `partition_key` feature.  See the KPL aggregation section below for more details.
+* `compression`: Setting `compression` to `zlib` will enable zlib compression of each record.  By default this feature is disabled and records are not compressed.
 
 ### Permissions
 
@@ -127,5 +128,40 @@ More specifically, increasing the flush value will ensure the most records are a
     region          us-west-2
     stream          my-kinesis-stream-name
     aggregation     true
+    append_newline  true
+```
+
+### ZLIB Compression
+
+Enabling `zlib` compression will compress each record individually reducing the network bandwidth required to send logs.  Using this feature in conjunction with `aggregation` can greatly reduce the number of Kinesis shards required.
+
+Compression Advantages:
+
+   - Reduces network bandwidth required
+   - Reduces Kinesis shard count in some scenarios
+
+Compression Disadvantages:
+
+   - Fluentbit will require more CPU and memory to send records
+   - A consumer must decompress the records
+
+
+Example config:
+
+```
+[SERVICE]
+     Flush 20
+
+[INPUT]
+    Name        forward
+    Listen      0.0.0.0
+    Port        24224
+
+[OUTPUT]
+    Name            kinesis
+    Match           *
+    region          us-west-2
+    stream          my-kinesis-stream-name
+    compression     zlib
     append_newline  true
 ```

@@ -18,6 +18,7 @@ package kinesis
 
 import (
 	"bytes"
+	"compress/zlib"
 	"fmt"
 	"math/rand"
 	"os"
@@ -67,6 +68,16 @@ type random struct {
 	buffer       []byte
 }
 
+// CompressionType indicates the type of compression to apply to each record
+type CompressionType string
+
+const (
+	// CompressionNone disables compression
+	CompressionNone CompressionType = "none"
+	// CompressionZlib enables zlib compression
+	CompressionZlib = "zlib"
+)
+
 // OutputPlugin sends log records to kinesis
 type OutputPlugin struct {
 	// The name of the stream that you want log records sent to
@@ -95,10 +106,11 @@ type OutputPlugin struct {
 	isAggregate           bool
 	aggregator            *aggregate.Aggregator
 	aggregatePartitionKey string
+	compression           CompressionType
 }
 
 // NewOutputPlugin creates an OutputPlugin object
-func NewOutputPlugin(region, stream, dataKeys, partitionKey, roleARN, kinesisEndpoint, stsEndpoint, timeKey, timeFmt, logKey string, concurrency, retryLimit int, isAggregate, appendNewline bool, pluginID int) (*OutputPlugin, error) {
+func NewOutputPlugin(region, stream, dataKeys, partitionKey, roleARN, kinesisEndpoint, stsEndpoint, timeKey, timeFmt, logKey string, concurrency, retryLimit int, isAggregate, appendNewline bool, compression CompressionType, pluginID int) (*OutputPlugin, error) {
 	client, err := newPutRecordsClient(roleARN, region, kinesisEndpoint, stsEndpoint)
 	if err != nil {
 		return nil, err
@@ -153,6 +165,7 @@ func NewOutputPlugin(region, stream, dataKeys, partitionKey, roleARN, kinesisEnd
 		concurrencyRetryLimit: retryLimit,
 		isAggregate:           isAggregate,
 		aggregator:            aggregator,
+		compression:           compression,
 	}, nil
 }
 
@@ -397,6 +410,13 @@ func (outputPlugin *OutputPlugin) processRecord(record map[interface{}]interface
 		data = append(data, []byte("\n")...)
 	}
 
+	if outputPlugin.compression == CompressionZlib {
+		data, err = zlibCompress(data)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	if len(data)+len(partitionKey) > maximumRecordSize {
 		return nil, fmt.Errorf("Log record greater than max size allowed by Kinesis")
 	}
@@ -510,6 +530,26 @@ func (outputPlugin *OutputPlugin) getPartitionKey(record map[interface{}]interfa
 		return outputPlugin.aggregatePartitionKey
 	}
 	return outputPlugin.randomString()
+}
+
+func zlibCompress(data []byte) ([]byte, error) {
+	var b bytes.Buffer
+
+	if data == nil {
+		return nil, fmt.Errorf("No data to compress.  'nil' value passed as data")
+	}
+
+	zw := zlib.NewWriter(&b)
+	_, err := zw.Write(data)
+	if err != nil {
+		return data, err
+	}
+	err = zw.Close()
+	if err != nil {
+		return data, err
+	}
+
+	return b.Bytes(), nil
 }
 
 // stringOrByteArray returns the string value if the input is a string or byte array otherwise an empty string

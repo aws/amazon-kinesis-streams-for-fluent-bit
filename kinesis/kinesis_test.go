@@ -41,16 +41,16 @@ func newMockOutputPlugin(client *mock_kinesis.MockPutRecordsClient, isAggregate 
 	}
 
 	return &OutputPlugin{
-		stream:       "stream",
-		client:       client,
-		dataKeys:     "",
-		partitionKey: "",
-		timer:        timer,
-		PluginID:     0,
-		random:       random,
+		stream:                "stream",
+		client:                client,
+		dataKeys:              "",
+		partitionKey:          "",
+		timer:                 timer,
+		PluginID:              0,
+		random:                random,
 		concurrencyRetryLimit: concurrencyRetryLimit,
-		isAggregate:  isAggregate,
-		aggregator:   aggregator,
+		isAggregate:           isAggregate,
+		aggregator:            aggregator,
 	}, nil
 }
 
@@ -167,4 +167,19 @@ func TestAddRecordWithConcurrency(t *testing.T) {
 
 	retCode = outputPlugin.FlushConcurrent(len(records), records)
 	assert.Equal(t, retCode, fluentbit.FLB_OK, "Expected FlushConcurrent return code to be FLB_OK")
+}
+
+func TestZlibCompression(t *testing.T) {
+
+	testData := []byte("Test Data: This is test data for compression.  This data is needs to have with some repetitive values, so compression is effective.")
+
+	compressedBuf, err := zlibCompress(testData)
+	assert.Equal(t, err, nil, "Expected successful compression of data")
+	assert.Lessf(t, len(compressedBuf), len(testData), "Compressed data buffer should contain fewer bytes")
+}
+
+func TestZlibCompressionEmpty(t *testing.T) {
+
+	_, err := zlibCompress(nil)
+	assert.NotEqual(t, err, nil, "'nil' data should return an error")
 }
