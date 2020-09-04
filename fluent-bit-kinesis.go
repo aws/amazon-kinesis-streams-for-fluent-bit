@@ -84,7 +84,9 @@ func newKinesisOutput(ctx unsafe.Pointer, pluginID int) (*kinesis.OutputPlugin, 
 	logKey := output.FLBPluginConfigKey(ctx, "log_key")
 	logrus.Infof("[kinesis %d] plugin parameter log_key = '%s'", pluginID, logKey)
 	aggregation := output.FLBPluginConfigKey(ctx, "aggregation")
-	logrus.Infof("[kinesis %d] plugin parameter aggregation = %s", pluginID, aggregation)
+	logrus.Infof("[kinesis %d] plugin parameter aggregation = '%s'", pluginID, aggregation)
+	compression := output.FLBPluginConfigKey(ctx, "compression")
+	logrus.Infof("[kinesis %d] plugin parameter compression = '%s'", pluginID, compression)
 
 	if stream == "" || region == "" {
 		return nil, fmt.Errorf("[kinesis %d] stream and region are required configuration parameters", pluginID)
@@ -145,7 +147,16 @@ func newKinesisOutput(ctx unsafe.Pointer, pluginID int) (*kinesis.OutputPlugin, 
 		concurrencyRetriesInt = defaultConcurrentRetries
 	}
 
-	return kinesis.NewOutputPlugin(region, stream, dataKeys, partitionKey, roleARN, kinesisEndpoint, stsEndpoint, timeKey, timeKeyFmt, logKey, concurrencyInt, concurrencyRetriesInt, isAggregate, appendNL, pluginID)
+	var comp kinesis.CompressionType
+	if strings.ToLower(compression) == string(kinesis.CompressionZlib) {
+		comp = kinesis.CompressionZlib
+	} else if strings.ToLower(compression) == string(kinesis.CompressionNone) || compression == "" {
+		comp = kinesis.CompressionNone
+	} else {
+		return nil, fmt.Errorf("[kinesis %d] Invalid 'compression' value (%s) specified, must be 'zlib', 'none', or undefined", pluginID, compression)
+	}
+
+	return kinesis.NewOutputPlugin(region, stream, dataKeys, partitionKey, roleARN, kinesisEndpoint, stsEndpoint, timeKey, timeKeyFmt, logKey, concurrencyInt, concurrencyRetriesInt, isAggregate, appendNL, comp, pluginID)
 }
 
 // The "export" comments have syntactic meaning
