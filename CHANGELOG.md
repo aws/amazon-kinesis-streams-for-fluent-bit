@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.6.0
+* Feature - Add support for zlib compression of records (#26)
+* Feature - Add KPL aggregation support (#16)
+
 ## 1.5.0
 * Feature - Add log_key option for kinesis output plugin (#40)
 
