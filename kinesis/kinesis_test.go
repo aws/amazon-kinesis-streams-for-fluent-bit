@@ -89,6 +89,27 @@ func TestAddRecord(t *testing.T) {
 	assert.Len(t, records, 1, "Expected output to contain 1 record")
 }
 
+func TestTruncateLargeLogEvent(t *testing.T) {
+	records := make([]*kinesis.PutRecordsRequestEntry, 0, 500)
+
+	record := map[interface{}]interface{}{
+		"somekey": make([]byte, 1024*1024),
+	}
+
+	outputPlugin, _ := newMockOutputPlugin(nil, false)
+
+	timeStamp := time.Now()
+	retCode := outputPlugin.AddRecord(&records, record, &timeStamp)
+	actualData, err := outputPlugin.processRecord(record, "testKey")
+	if err != nil {
+		logrus.Errorf("[kinesis %d] %v\n", outputPlugin.PluginID, err)
+	}
+
+	assert.Equal(t, retCode, fluentbit.FLB_OK, "Expected return code to be FLB_OK")
+	assert.Len(t, records, 1, "Expected output to contain 1 record")
+	assert.Len(t, actualData, 1024*1024-len("testKey"), "Expected length is less than 1MB")
+}
+
 func TestAddRecordAndFlush(t *testing.T) {
 	records := make([]*kinesis.PutRecordsRequestEntry, 0, 500)
 

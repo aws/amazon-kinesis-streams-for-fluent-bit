@@ -42,6 +42,7 @@ import (
 
 const (
 	partitionKeyCharset = "abcdefghijklmnopqrstuvwxyz" + "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	truncatedSuffix     = "[Truncated...]"
 )
 
 const (
@@ -418,7 +419,9 @@ func (outputPlugin *OutputPlugin) processRecord(record map[interface{}]interface
 	}
 
 	if len(data)+len(partitionKey) > maximumRecordSize {
-		return nil, fmt.Errorf("Log record greater than max size allowed by Kinesis")
+		logrus.Warnf("[kinesis %d] Found record with %d bytes, truncating to 1MB, stream=%s\n", outputPlugin.PluginID, len(data)+len(partitionKey), outputPlugin.stream)
+		data = data[:maximumRecordSize-len(partitionKey)-len(truncatedSuffix)]
+		data = append(data, []byte(truncatedSuffix)...)
 	}
 
 	return data, nil
