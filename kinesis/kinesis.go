@@ -408,17 +408,18 @@ func (outputPlugin *OutputPlugin) FlushConcurrent(count int, records []*kinesis.
 
 func replaceDots(obj map[interface{}]interface{}) map[interface{}]interface{} {
 	for k, v := range obj {
+		var curK = k
 		switch kt := k.(type) {
 		case string:
-			k = strings.ReplaceAll(kt, ".", "_")
+			curK = strings.ReplaceAll(kt, ".", "_")
 		}
-
+		delete(obj, k)
 		switch vt := v.(type) {
 		case map[interface{}]interface{}:
 			v = replaceDots(vt)
 		}
 
-		obj[k] = v
+		obj[curK] = v
 	}
 
 	return obj
