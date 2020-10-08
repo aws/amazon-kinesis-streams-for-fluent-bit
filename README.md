@@ -131,6 +131,7 @@ More specifically, increasing the flush value will ensure the most records are a
     stream          my-kinesis-stream-name
     aggregation     true
     append_newline  true
+    replace_dots    true
 ```
 
 ### ZLIB Compression
@@ -166,4 +167,5 @@ Example config:
     stream          my-kinesis-stream-name
     compression     zlib
     append_newline  true
+    replace_dots    true
 ```

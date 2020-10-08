@@ -208,6 +208,7 @@ func TestZlibCompressionEmpty(t *testing.T) {
 }
 
 func TestDotReplace(t *testing.T) {
+	records := make([]*kinesis.PutRecordsRequestEntry, 0, 500)
 	record := map[interface{}]interface{}{
 		"testkey": []byte("test value"),
 		"kubernetes": map[interface{}]interface{}{
@@ -216,13 +217,14 @@ func TestDotReplace(t *testing.T) {
 		},
 	}
 
-	outputPlugin, _ := newMockOutputPlugin(nil)
+	outputPlugin, _ := newMockOutputPlugin(nil, false)
 
-	retCode := outputPlugin.AddRecord(record)
+	timeStamp := time.Now()
+	retCode := outputPlugin.AddRecord(&records, record, &timeStamp)
 	assert.Equal(t, retCode, fluentbit.FLB_OK, "Expected return code to be FLB_OK")
-	assert.Len(t, outputPlugin.records, 1, "Expected output to contain 1 record")
+	assert.Len(t, records, 1, "Expected output to contain 1 record")
 
-	data := outputPlugin.records[0].Data
+	data := records[0].Data
 
 	var log map[string]map[string]interface{}
 	json.Unmarshal(data, &log)
