@@ -109,12 +109,12 @@ type OutputPlugin struct {
 	aggregator            *aggregate.Aggregator
 	aggregatePartitionKey string
 	compression           CompressionType
-	// Decide whether dots in key names should be replaced with underscores
-	replaceDots bool
+	// If specified, dots in key names should be replaced with other symbols
+	replaceDots           string
 }
 
 // NewOutputPlugin creates an OutputPlugin object
-func NewOutputPlugin(region, stream, dataKeys, partitionKey, roleARN, kinesisEndpoint, stsEndpoint, timeKey, timeFmt, logKey string, concurrency, retryLimit int, isAggregate, appendNewline, replaceDots bool, compression CompressionType, pluginID int) (*OutputPlugin, error) {
+func NewOutputPlugin(region, stream, dataKeys, partitionKey, roleARN, kinesisEndpoint, stsEndpoint, timeKey, timeFmt, logKey, replaceDots string, concurrency, retryLimit int, isAggregate, appendNewline bool, compression CompressionType, pluginID int) (*OutputPlugin, error) {
 	client, err := newPutRecordsClient(roleARN, region, kinesisEndpoint, stsEndpoint, pluginID)
 	if err != nil {
 		return nil, err
@@ -406,17 +406,17 @@ func (outputPlugin *OutputPlugin) FlushConcurrent(count int, records []*kinesis.
 
 }
 
-func replaceDots(obj map[interface{}]interface{}) map[interface{}]interface{} {
+func replaceDots(obj map[interface{}]interface{}, replacement string) map[interface{}]interface{} {
 	for k, v := range obj {
 		var curK = k
 		switch kt := k.(type) {
 		case string:
-			curK = strings.ReplaceAll(kt, ".", "_")
+			curK = strings.ReplaceAll(kt, ".", replacement)
 		}
 		delete(obj, k)
 		switch vt := v.(type) {
 		case map[interface{}]interface{}:
-			v = replaceDots(vt)
+			v = replaceDots(vt, replacement)
 		}
 
 		obj[curK] = v
@@ -437,8 +437,8 @@ func (outputPlugin *OutputPlugin) processRecord(record map[interface{}]interface
 		return nil, err
 	}
 
-	if outputPlugin.replaceDots {
-		record = replaceDots(record)
+	if outputPlugin.replaceDots != "" {
+		record = replaceDots(record, outputPlugin.replaceDots)
 	}
 
 	var json = jsoniter.ConfigCompatibleWithStandardLibrary

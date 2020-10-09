@@ -24,7 +24,7 @@ If you think you’ve found a potential security issue, please do not post it in
 * `experimental_concurrency_retries`: Specify a limit to the number of retries concurrent goroutines will attempt.  By default `4` retries will be attempted before records are dropped.
 * `aggregation`: Setting `aggregation` to `true` will enable KPL aggregation of records sent to Kinesis.  This feature isn't compatible with the `partition_key` feature.  See the KPL aggregation section below for more details.
 * `compression`: Setting `compression` to `zlib` will enable zlib compression of each record.  By default this feature is disabled and records are not compressed.
-* `replace_dots`: If you set replace_dots as true, all dots in key names will be replaced with underscores.
+* `replace_dots`: A string which will be what you replace the dots in the key name with. By default, it will be empty which means the feature is disabled.
 
 ### Permissions
 
@@ -58,7 +58,7 @@ This plugin has been tested with Fluent Bit 1.2.0+. It may not work with older F
     stream          my-kinesis-stream-name
     partition_key   container_id
     append_newline  true
-    replace_dots    true
+    replace_dots    _
 ```
 
 ### AWS for Fluent Bit
@@ -131,7 +131,6 @@ More specifically, increasing the flush value will ensure the most records are a
     stream          my-kinesis-stream-name
     aggregation     true
     append_newline  true
-    replace_dots    true
 ```
 
 ### ZLIB Compression
@@ -167,5 +166,4 @@ Example config:
     stream          my-kinesis-stream-name
     compression     zlib
     append_newline  true
-    replace_dots    true
 ```

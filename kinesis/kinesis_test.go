@@ -52,7 +52,7 @@ func newMockOutputPlugin(client *mock_kinesis.MockPutRecordsClient, isAggregate 
 		concurrencyRetryLimit: concurrencyRetryLimit,
 		isAggregate:           isAggregate,
 		aggregator:            aggregator,
-		replaceDots:           true,
+		replaceDots:           "-",
 	}, nil
 }
 
@@ -210,7 +210,11 @@ func TestZlibCompressionEmpty(t *testing.T) {
 func TestDotReplace(t *testing.T) {
 	records := make([]*kinesis.PutRecordsRequestEntry, 0, 500)
 	record := map[interface{}]interface{}{
-		"testkey": []byte("test value"),
+		"message.key": map[interface{}]interface{}{
+			"messagevalue":      []byte("some.message"),
+			"message.value/one": []byte("some message"),
+			"message.value/two": []byte("some message"),
+		},
 		"kubernetes": map[interface{}]interface{}{
 			"app":                    []byte("test app label"),
 			"app.kubernetes.io/name": []byte("test key with dots"),
@@ -230,5 +234,8 @@ func TestDotReplace(t *testing.T) {
 	json.Unmarshal(data, &log)
 
 	assert.Equal(t, "test app label", log["kubernetes"]["app"])
-	assert.Equal(t, "test key with dots", log["kubernetes"]["app_kubernetes_io/name"])
+	assert.Equal(t, "test key with dots", log["kubernetes"]["app-kubernetes-io/name"])
+	assert.Equal(t, "some.message", log["message-key"]["messagevalue"])
+	assert.Equal(t, "some message", log["message-key"]["message-value/one"])
+	assert.Equal(t, "some message", log["message-key"]["message-value/two"])
 }
