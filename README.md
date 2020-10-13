@@ -24,7 +24,7 @@ If you think you’ve found a potential security issue, please do not post it in
 * `experimental_concurrency_retries`: Specify a limit to the number of retries concurrent goroutines will attempt.  By default `4` retries will be attempted before records are dropped.
 * `aggregation`: Setting `aggregation` to `true` will enable KPL aggregation of records sent to Kinesis.  This feature isn't compatible with the `partition_key` feature.  See the KPL aggregation section below for more details.
 * `compression`: Setting `compression` to `zlib` will enable zlib compression of each record.  By default this feature is disabled and records are not compressed.
-* `replace_dots`: A string which will be what you replace the dots in the key name with. By default, it will be empty which means the feature is disabled.
+* `replace_dots`: Replace dot characters in key names with the value of this option. For example, if you add `replace_dots _` in your config then all occurrences of `.` will be replaced with an underscore. By default, dots will not be replaced.
 
 ### Permissions
 

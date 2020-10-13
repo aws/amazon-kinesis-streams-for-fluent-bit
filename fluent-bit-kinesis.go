@@ -107,10 +107,6 @@ func newKinesisOutput(ctx unsafe.Pointer, pluginID int) (*kinesis.OutputPlugin, 
 		appendNL = true
 	}
 
-	if replaceDots == "" {
-		logrus.Infof("[kinesis %d] No replacement provided. Do not need to replace dots with other symbols.", pluginID)
-	}
-
 	isAggregate := false
 	if strings.ToLower(aggregation) == "true" {
 		isAggregate = true
