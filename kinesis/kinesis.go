@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -108,10 +109,12 @@ type OutputPlugin struct {
 	aggregator            *aggregate.Aggregator
 	aggregatePartitionKey string
 	compression           CompressionType
+	// If specified, dots in key names should be replaced with other symbols
+	replaceDots           string
 }
 
 // NewOutputPlugin creates an OutputPlugin object
-func NewOutputPlugin(region, stream, dataKeys, partitionKey, roleARN, kinesisEndpoint, stsEndpoint, timeKey, timeFmt, logKey string, concurrency, retryLimit int, isAggregate, appendNewline bool, compression CompressionType, pluginID int) (*OutputPlugin, error) {
+func NewOutputPlugin(region, stream, dataKeys, partitionKey, roleARN, kinesisEndpoint, stsEndpoint, timeKey, timeFmt, logKey, replaceDots string, concurrency, retryLimit int, isAggregate, appendNewline bool, compression CompressionType, pluginID int) (*OutputPlugin, error) {
 	client, err := newPutRecordsClient(roleARN, region, kinesisEndpoint, stsEndpoint, pluginID)
 	if err != nil {
 		return nil, err
@@ -167,6 +170,7 @@ func NewOutputPlugin(region, stream, dataKeys, partitionKey, roleARN, kinesisEnd
 		isAggregate:           isAggregate,
 		aggregator:            aggregator,
 		compression:           compression,
+		replaceDots:           replaceDots,
 	}, nil
 }
 
@@ -402,6 +406,25 @@ func (outputPlugin *OutputPlugin) FlushConcurrent(count int, records []*kinesis.
 
 }
 
+func replaceDots(obj map[interface{}]interface{}, replacement string) map[interface{}]interface{} {
+	for k, v := range obj {
+		var curK = k
+		switch kt := k.(type) {
+		case string:
+			curK = strings.ReplaceAll(kt, ".", replacement)
+		}
+		delete(obj, k)
+		switch vt := v.(type) {
+		case map[interface{}]interface{}:
+			v = replaceDots(vt, replacement)
+		}
+
+		obj[curK] = v
+	}
+
+	return obj
+}
+
 func (outputPlugin *OutputPlugin) processRecord(record map[interface{}]interface{}, partitionKey string) ([]byte, error) {
 	if outputPlugin.dataKeys != "" {
 		record = plugins.DataKeys(outputPlugin.dataKeys, record)
@@ -412,6 +435,10 @@ func (outputPlugin *OutputPlugin) processRecord(record map[interface{}]interface
 	if err != nil {
 		logrus.Debugf("[kinesis %d] Failed to decode record: %v\n", outputPlugin.PluginID, record)
 		return nil, err
+	}
+
+	if outputPlugin.replaceDots != "" {
+		record = replaceDots(record, outputPlugin.replaceDots)
 	}
 
 	var json = jsoniter.ConfigCompatibleWithStandardLibrary

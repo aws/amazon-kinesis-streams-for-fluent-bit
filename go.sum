@@ -23,6 +23,7 @@ github.com/envoyproxy/go-control-plane v0.9.1-0.20191026205805-5f8ba28d4473/go.m
 github.com/envoyproxy/protoc-gen-validate v0.1.0/go.mod h1:iSmxcyjqTsJpI2R4NaDN7+kN2VEUnK/pcBlmesArF7c=
 github.com/fluent/fluent-bit-go v0.0.0-20200707230002-2a28684e2382 h1:gV8vs5nuIWEbCn/EnHa8/2VEbFcGpchUhqftnxHSOrI=
 github.com/fluent/fluent-bit-go v0.0.0-20200707230002-2a28684e2382/go.mod h1:L92h+dgwElEyUuShEwjbiHjseW410WIcNz+Bjutc8YQ=
+github.com/fluent/fluent-bit-go v0.0.0-20200729034236-b9c0d6a20853 h1:QapwPpeMtcxkG6WjcQQneyGtVSsr4meJ0Fz4B2T3j/c=
 github.com/go-sql-driver/mysql v1.5.0/go.mod h1:DCzpHaOWr8IXmIStZouvnhqoel9Qv2LBy8hT2VhHyBg=
 github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b/go.mod h1:SBH7ygxi8pfUlaOkMMuAQtPIUF8ecWP5IEl/CR7VP2Q=
 github.com/golang/mock v1.1.1/go.mod h1:oTYuIxOrZwtPieC+H1uAHpcLFnEyAGVDL/k47Jfbm0A=
