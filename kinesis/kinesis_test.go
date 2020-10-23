@@ -239,3 +239,45 @@ func TestDotReplace(t *testing.T) {
 	assert.Equal(t, "some message", log["message-key"]["message-value/one"])
 	assert.Equal(t, "some message", log["message-key"]["message-value/two"])
 }
+
+func TestGetPartitionKey(t *testing.T) {
+	record := map[interface{}]interface{}{
+		"testKey": []byte("test value with no nested keys"),
+		"testKeyWithOneNestedKey": map[interface{}]interface{}{
+			"nestedKey": []byte("test value with one nested key"),
+		},
+		"testKeyWithNestedKeys": map[interface{}]interface{}{
+			"outerKey": map[interface{}]interface{}{
+				"innerKey": []byte("test value with inner key"),
+			},
+		},
+	}
+
+	//test getPartitionKey() with single partition key
+	outputPlugin, _ := newMockOutputPlugin(nil, false)
+	outputPlugin.partitionKey = "testKey"
+	value := outputPlugin.getPartitionKey(record)
+	assert.Equal(t, value, "test value with no nested keys")
+
+	//test getPartitionKey() with nested partition key
+	outputPlugin.partitionKey = "testKeyWithOneNestedKey->nestedKey"
+	value = outputPlugin.getPartitionKey(record)
+	assert.Equal(t, value, "test value with one nested key")
+
+	outputPlugin.partitionKey = "testKeyWithNestedKeys->outerKey->innerKey"
+	value = outputPlugin.getPartitionKey(record)
+	assert.Equal(t, value, "test value with inner key")
+
+	//test getPartitionKey() with partition key not found
+	outputPlugin.partitionKey = "some key"
+	value = outputPlugin.getPartitionKey(record)
+	assert.Len(t, value, 8, "This should be a random string")
+
+	outputPlugin.partitionKey = "testKeyWithOneNestedKey"
+	value = outputPlugin.getPartitionKey(record)
+	assert.Len(t, value, 8, "This should be a random string")
+
+	outputPlugin.partitionKey = "testKeyWithOneNestedKey->someKey"
+	value = outputPlugin.getPartitionKey(record)
+	assert.Len(t, value, 8, "This should be a random string")
+}

@@ -250,6 +250,7 @@ func (outputPlugin *OutputPlugin) AddRecord(records *[]*kinesis.PutRecordsReques
 	}
 
 	partitionKey := outputPlugin.getPartitionKey(record)
+	logrus.Debugf("[kinesis %d] Got value: %s for a given partition key.\n", outputPlugin.PluginID, partitionKey)
 	data, err := outputPlugin.processRecord(record, partitionKey)
 	if err != nil {
 		logrus.Errorf("[kinesis %d] %v\n", outputPlugin.PluginID, err)
@@ -562,21 +563,41 @@ func (outputPlugin *OutputPlugin) randomString() string {
 	return string(outputPlugin.random.buffer)
 }
 
+func getFromMap(dataKey string, record map[interface{}]interface{}) interface{} {
+	for k, v := range record {
+		currentKey := stringOrByteArray(k)
+		if currentKey == dataKey {
+			return v
+		}
+	}
+
+	return ""
+}
+
 // getPartitionKey returns the value for a given valid key
 // if the given key is empty or invalid, it returns a random string
 func (outputPlugin *OutputPlugin) getPartitionKey(record map[interface{}]interface{}) string {
 	partitionKey := outputPlugin.partitionKey
 	if partitionKey != "" {
-		for k, v := range record {
-			dataKey := stringOrByteArray(k)
-			if dataKey == partitionKey {
-				value := stringOrByteArray(v)
+		partitionKeys := strings.Split(partitionKey, "->")
+		num := len(partitionKeys)
+		for count, dataKey := range partitionKeys {
+			newRecord := getFromMap(dataKey, record)
+			if count == num-1 {
+				value := stringOrByteArray(newRecord)
 				if value != "" {
 					if len(value) > partitionKeyMaxLength {
 						value = value[0:partitionKeyMaxLength]
 					}
 					return value
 				}
+			}
+			_, ok := newRecord.(map[interface{}]interface{})
+			if ok {
+				record = newRecord.(map[interface{}]interface{})
+			} else {
+				logrus.Errorf("[kinesis %d] The partition key could not be found in the record, using a random string instead", outputPlugin.PluginID)
+				return outputPlugin.randomString()
 			}
 		}
 	}
