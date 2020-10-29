@@ -13,7 +13,7 @@ require (
 	github.com/json-iterator/go v1.1.10
 	github.com/lestrrat-go/strftime v1.0.3
 	github.com/sirupsen/logrus v1.7.0
-	github.com/stretchr/testify v1.5.1
+	github.com/stretchr/testify v1.6.1
 	github.com/tebeka/strftime v0.1.5 // indirect
 	google.golang.org/protobuf v1.25.0
 )
