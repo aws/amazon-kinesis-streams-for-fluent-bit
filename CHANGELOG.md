@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.6.1
+* Bug - Truncate records to max size (#74)
+
 ## 1.6.0
 * Feature - Add support for zlib compression of records (#26)
 * Feature - Add KPL aggregation support (#16)

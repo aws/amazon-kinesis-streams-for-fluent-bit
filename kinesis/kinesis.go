@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -108,11 +109,13 @@ type OutputPlugin struct {
 	aggregator            *aggregate.Aggregator
 	aggregatePartitionKey string
 	compression           CompressionType
+	// If specified, dots in key names should be replaced with other symbols
+	replaceDots           string
 }
 
 // NewOutputPlugin creates an OutputPlugin object
-func NewOutputPlugin(region, stream, dataKeys, partitionKey, roleARN, kinesisEndpoint, stsEndpoint, timeKey, timeFmt, logKey string, concurrency, retryLimit int, isAggregate, appendNewline bool, compression CompressionType, pluginID int) (*OutputPlugin, error) {
-	client, err := newPutRecordsClient(roleARN, region, kinesisEndpoint, stsEndpoint)
+func NewOutputPlugin(region, stream, dataKeys, partitionKey, roleARN, kinesisEndpoint, stsEndpoint, timeKey, timeFmt, logKey, replaceDots string, concurrency, retryLimit int, isAggregate, appendNewline bool, compression CompressionType, pluginID int) (*OutputPlugin, error) {
+	client, err := newPutRecordsClient(roleARN, region, kinesisEndpoint, stsEndpoint, pluginID)
 	if err != nil {
 		return nil, err
 	}
@@ -167,11 +170,12 @@ func NewOutputPlugin(region, stream, dataKeys, partitionKey, roleARN, kinesisEnd
 		isAggregate:           isAggregate,
 		aggregator:            aggregator,
 		compression:           compression,
+		replaceDots:           replaceDots,
 	}, nil
 }
 
 // newPutRecordsClient creates the Kinesis client for calling the PutRecords method
-func newPutRecordsClient(roleARN string, awsRegion string, kinesisEndpoint string, stsEndpoint string) (*kinesis.Kinesis, error) {
+func newPutRecordsClient(roleARN string, awsRegion string, kinesisEndpoint string, stsEndpoint string, pluginID int) (*kinesis.Kinesis, error) {
 	customResolverFn := func(service, region string, optFns ...func(*endpoints.Options)) (endpoints.ResolvedEndpoint, error) {
 		if service == endpoints.KinesisServiceID && kinesisEndpoint != "" {
 			return endpoints.ResolvedEndpoint{
@@ -185,22 +189,49 @@ func newPutRecordsClient(roleARN string, awsRegion string, kinesisEndpoint strin
 		return endpoints.DefaultResolver().EndpointFor(service, region, optFns...)
 	}
 
-	sess, err := session.NewSession(&aws.Config{
+	// Fetch base credentials
+	baseConfig := &aws.Config{
 		Region:                        aws.String(awsRegion),
 		EndpointResolver:              endpoints.ResolverFunc(customResolverFn),
 		CredentialsChainVerboseErrors: aws.Bool(true),
-	})
+	}
+
+	sess, err := session.NewSession(baseConfig)
 	if err != nil {
 		return nil, err
 	}
 
-	svcConfig := &aws.Config{}
+	var svcSess = sess
+	var svcConfig = baseConfig
+	eksRole := os.Getenv("EKS_POD_EXECUTION_ROLE")
+	if eksRole != "" {
+		logrus.Debugf("[kinesis %d] Fetching EKS pod credentials.\n", pluginID)
+		eksConfig := &aws.Config{}
+		creds := stscreds.NewCredentials(svcSess, eksRole)
+		eksConfig.Credentials = creds
+		eksConfig.Region = aws.String(awsRegion)
+		svcConfig = eksConfig
+
+		svcSess, err = session.NewSession(svcConfig)
+		if err != nil {
+			return nil, err
+		}
+	}
 	if roleARN != "" {
-		creds := stscreds.NewCredentials(sess, roleARN)
-		svcConfig.Credentials = creds
+		logrus.Debugf("[kinesis %d] Fetching credentials for %s\n", pluginID, roleARN)
+		stsConfig := &aws.Config{}
+		creds := stscreds.NewCredentials(svcSess, roleARN)
+		stsConfig.Credentials = creds
+		stsConfig.Region = aws.String(awsRegion)
+		svcConfig = stsConfig
+
+		svcSess, err = session.NewSession(svcConfig)
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	client := kinesis.New(sess, svcConfig)
+	client := kinesis.New(svcSess, svcConfig)
 	client.Handlers.Build.PushBackNamed(plugins.CustomUserAgentHandler())
 	return client, nil
 }
@@ -375,6 +406,25 @@ func (outputPlugin *OutputPlugin) FlushConcurrent(count int, records []*kinesis.
 
 }
 
+func replaceDots(obj map[interface{}]interface{}, replacement string) map[interface{}]interface{} {
+	for k, v := range obj {
+		var curK = k
+		switch kt := k.(type) {
+		case string:
+			curK = strings.ReplaceAll(kt, ".", replacement)
+		}
+		delete(obj, k)
+		switch vt := v.(type) {
+		case map[interface{}]interface{}:
+			v = replaceDots(vt, replacement)
+		}
+
+		obj[curK] = v
+	}
+
+	return obj
+}
+
 func (outputPlugin *OutputPlugin) processRecord(record map[interface{}]interface{}, partitionKey string) ([]byte, error) {
 	if outputPlugin.dataKeys != "" {
 		record = plugins.DataKeys(outputPlugin.dataKeys, record)
@@ -385,6 +435,10 @@ func (outputPlugin *OutputPlugin) processRecord(record map[interface{}]interface
 	if err != nil {
 		logrus.Debugf("[kinesis %d] Failed to decode record: %v\n", outputPlugin.PluginID, record)
 		return nil, err
+	}
+
+	if outputPlugin.replaceDots != "" {
+		record = replaceDots(record, outputPlugin.replaceDots)
 	}
 
 	var json = jsoniter.ConfigCompatibleWithStandardLibrary

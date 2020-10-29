@@ -108,7 +108,7 @@ func (a *Aggregator) AggregateRecords() (entry *kinesis.PutRecordsRequestEntry, 
 	kclData := append(kclMagicNumber, protoBufData...)
 	kclData = append(kclData, md5CheckSum...)
 
-	logrus.Infof("[kinesis ] Aggregated (%d) records of size (%d) with total size (%d), partition key (%s)\n", len(a.records), a.getSize(), len(kclData), pkeys[0])
+	logrus.Debugf("[kinesis ] Aggregated (%d) records of size (%d) with total size (%d), partition key (%s)\n", len(a.records), a.getSize(), len(kclData), pkeys[0])
 
 	// Clear buffer if aggregation didn't fail
 	a.clearBuffer()
