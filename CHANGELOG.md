@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.7.0
+* Feature - Add new option replace_dots to replace dots in key names (#79)
+* Enhancement - Add support for nested partition_key in log record (#30)
+* Enhancement - Change the log severity from `info` to `debug` for aggregation log statements (#78)
+
 ## 1.6.1
 * Bug - Truncate records to max size (#74)
 
