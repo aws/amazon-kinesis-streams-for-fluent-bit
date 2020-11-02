@@ -4,8 +4,8 @@ github.com/aws/amazon-kinesis-firehose-for-fluent-bit v1.4.2 h1:cxszZVyfBNmT5fgi
 github.com/aws/amazon-kinesis-firehose-for-fluent-bit v1.4.2/go.mod h1:xKkwx++juNoJMl0mm2V1+CJ+cKK22lOUEvxIwebe6hc=
 github.com/aws/aws-sdk-go v1.34.22 h1:7V2sKilVVgHqdjbW+O/xaVWYfnmuLwZdF/+6JuUh6Cw=
 github.com/aws/aws-sdk-go v1.34.22/go.mod h1:5zCpMtNQVjRREroY7sYe8lOMRSxkhG6MZveU8YkpAk0=
-github.com/aws/aws-sdk-go v1.35.17 h1:zhahppAMdPvJ9GP302SMOPW5SNoAbnjdOyaTmxA9WJU=
-github.com/aws/aws-sdk-go v1.35.17/go.mod h1:tlPOdRjfxPBpNIwqDj61rmsnA85v9jc0Ps9+muhnW+k=
+github.com/aws/aws-sdk-go v1.35.19 h1:vdIqQnOIqTNtvnOdt9r3Bf/FiCJ7KV/7O2BIj4TPx2w=
+github.com/aws/aws-sdk-go v1.35.19/go.mod h1:tlPOdRjfxPBpNIwqDj61rmsnA85v9jc0Ps9+muhnW+k=
 github.com/census-instrumentation/opencensus-proto v0.2.1/go.mod h1:f6KPmirojxKA12rnyqOA5BBL4O983OfeGPqjHWSTneU=
 github.com/client9/misspell v0.3.4/go.mod h1:qj6jICC3Q7zFZvVWo7KLAzC3yx5G7kyvSDkc90ppPyw=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
