@@ -1,0 +1,55 @@
+name: BuildAndRelease
+
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  build:
+    name: BuildAndRelease
+    runs-on: ubuntu-latest
+    steps:
+
+    - name: Set up Go 1.15
+      uses: actions/setup-go@v2
+      with:
+        go-version: 1.15
+      id: go
+
+    - name: Set env
+      run: echo "RELEASE_VERSION=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
+
+    - name: Check out code into the Go module directory
+      uses: actions/checkout@v2
+
+    - name: golint
+      run: go get -u golang.org/x/lint/golint
+
+    - name: Build
+      run: make build test
+
+    - name: Package
+      run: make release
+
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref }}
+        release_name: AWS Kinesis Streams for Fluent Bit ${{ env.RELEASE_VERSION }}
+        draft: false
+        prerelease: false
+
+    - name: Upload Release Asset
+      id: upload-release-asset 
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./plugin.tgz
+        asset_name: plugin-${{ env.RELEASE_VERSION }}.tgz
+        asset_content_type: application/x-gzip
+
