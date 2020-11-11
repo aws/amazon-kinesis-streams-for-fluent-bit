@@ -30,7 +30,7 @@ $(PLUGIN_BINARY): $(SOURCES)
 	PATH=${PATH} golint ./kinesis	
 
 plugin.tgz: $(PLUGIN_BINARY)
-	tar --strip-components 1 -zcvf plugin.tgz $(PLUGIN_BINARY)
+	tar --strip-components 2 -zcvf plugin.tgz $(PLUGIN_BINARY)
 
 .PHONY: generate
 generate: $(SOURCES)
