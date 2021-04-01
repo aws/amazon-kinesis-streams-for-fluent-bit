@@ -9,6 +9,8 @@ github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSs
 github.com/fastly/go-utils v0.0.0-20180712184237-d95a45783239/go.mod h1:Gdwt2ce0yfBxPvZrHkprdPPTTS3N5rwmLE8T22KBXlw=
 github.com/fluent/fluent-bit-go v0.0.0-20200707230002-2a28684e2382 h1:gV8vs5nuIWEbCn/EnHa8/2VEbFcGpchUhqftnxHSOrI=
 github.com/fluent/fluent-bit-go v0.0.0-20200707230002-2a28684e2382/go.mod h1:L92h+dgwElEyUuShEwjbiHjseW410WIcNz+Bjutc8YQ=
+github.com/fluent/fluent-bit-go v0.0.0-20201210173045-3fd1e0486df2 h1:G57WNyWS0FQf43hjRXLy5JT1V5LWVsSiEpkUcT67Ugk=
+github.com/fluent/fluent-bit-go v0.0.0-20201210173045-3fd1e0486df2/go.mod h1:L92h+dgwElEyUuShEwjbiHjseW410WIcNz+Bjutc8YQ=
 github.com/golang/mock v1.4.4 h1:l75CXGRSwbaYNpl/Z2X1XIIAMSCquvXgpVZDhwEIJsc=
 github.com/golang/mock v1.4.4/go.mod h1:l3mdAwkq5BuhzHwde/uurv3sEJeZMXNpwsxVWU71h+4=
 github.com/golang/protobuf v1.5.0 h1:LUVKkCeviFUMKqHa4tXIIij/lbhnMbP7Fn5wKdKkRh4=
