@@ -12,5 +12,5 @@ require (
 	github.com/lestrrat-go/strftime v1.0.4
 	github.com/sirupsen/logrus v1.8.1
 	github.com/stretchr/testify v1.7.0
-	google.golang.org/protobuf v1.27.0
+	google.golang.org/protobuf v1.27.1
 )
