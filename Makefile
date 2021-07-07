@@ -24,10 +24,13 @@ release:
 	@echo "Built Amazon Kinesis Data Streams Fluent Bit Plugin v$(PLUGIN_VERSION)"
 
 .PHONY: build
-build: $(PLUGIN_BINARY) release
+build: $(PLUGIN_BINARY) release plugin.tgz
 
 $(PLUGIN_BINARY): $(SOURCES)
 	PATH=${PATH} golint ./kinesis	
+
+plugin.tgz: $(PLUGIN_BINARY)
+	tar --strip-components 2 -zcvf plugin.tgz $(PLUGIN_BINARY)
 
 .PHONY: generate
 generate: $(SOURCES)
