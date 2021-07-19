@@ -9,7 +9,7 @@ require (
 	github.com/golang/mock v1.4.4
 	github.com/golang/protobuf v1.5.2
 	github.com/json-iterator/go v1.1.11
-	github.com/lestrrat-go/strftime v1.0.4
+	github.com/lestrrat-go/strftime v1.0.5
 	github.com/sirupsen/logrus v1.8.1
 	github.com/stretchr/testify v1.7.0
 	google.golang.org/protobuf v1.27.1
