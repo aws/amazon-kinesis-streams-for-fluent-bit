@@ -19,9 +19,24 @@ var (
 const (
 	maximumRecordSize       = 1024 * 1024 // 1 MB
 	defaultMaxAggRecordSize = 20 * 1024   // 20K
-	pKeyIdxSize             = 8
-	aggProtobufBytes        = 2 // Marshalling the data into protobuf adds an additional 2 bytes.
+	initialAggRecordSize    = 0
+	fieldNumberSize         = 1 // All field numbers are below 16, meaning they will only take up 1 byte
 )
+
+// Effectively just ceil(log base 128 of int)
+// The size in bytes that the protobuf representation will take
+func varint64Size(varint uint64) (size int) {
+	size = 1
+	for varint >= 0x80 {
+		size += 1
+		varint >>= 7;
+	}
+	return size;
+}
+
+func varintSize(varint int) (size int) {
+	return varint64Size(uint64(varint))
+}
 
 // Aggregator kinesis aggregator
 type Aggregator struct {
@@ -38,6 +53,7 @@ func NewAggregator() *Aggregator {
 		partitionKeys:    make(map[string]uint64, 0),
 		records:          make([]*Record, 0),
 		maxAggRecordSize: defaultMaxAggRecordSize,
+		aggSize:          initialAggRecordSize,
 	}
 }
 
@@ -59,8 +75,16 @@ func (a *Aggregator) AddRecord(partitionKey string, data []byte) (entry *kinesis
 			PartitionKey: aws.String(partitionKey),
 		}, nil
 	}
+	// Check if we need to add a new partition key, and if we do how much space it will take
+	pKeyIdx, pKeyAddedSize := a.checkPartitionKey(partitionKey)
 
-	if a.getSize()+dataSize+partitionKeySize+pKeyIdxSize >= maximumRecordSize {
+	// data field size is data length + varint of data length size + data field number size
+	// partition key field size is varint of index size + field number size
+	recordSize := dataSize + varintSize(dataSize) + fieldNumberSize + varint64Size(pKeyIdx) + fieldNumberSize
+	// Total size is record size + varint of record size size + field number of parent proto
+	addedSize := recordSize + varintSize(recordSize) + fieldNumberSize
+
+	if a.getSize() + addedSize + pKeyAddedSize >= maximumRecordSize {
 		// Aggregate records, and return
 		entry, err = a.AggregateRecords()
 		if err != nil {
@@ -76,7 +100,7 @@ func (a *Aggregator) AddRecord(partitionKey string, data []byte) (entry *kinesis
 		PartitionKeyIndex: &partitionKeyIndex,
 	})
 
-	a.aggSize += dataSize + pKeyIdxSize
+	a.aggSize += addedSize
 
 	return entry, err
 }
@@ -132,8 +156,20 @@ func (a *Aggregator) addPartitionKey(partitionKey string) uint64 {
 
 	idx := uint64(len(a.partitionKeys))
 	a.partitionKeys[partitionKey] = idx
-	a.aggSize += len([]byte(partitionKey))
+
+	partitionKeyLen := len([]byte(partitionKey))
+	a.aggSize += partitionKeyLen + varintSize(partitionKeyLen) + fieldNumberSize
 	return idx
+}
+
+func (a *Aggregator) checkPartitionKey(partitionKey string) (uint64, int) {
+	if idx, ok := a.partitionKeys[partitionKey]; ok {
+		return idx, 0
+	}
+
+	idx := uint64(len(a.partitionKeys))
+	partitionKeyLen := len([]byte(partitionKey))
+	return idx, partitionKeyLen + varintSize(partitionKeyLen) + fieldNumberSize
 }
 
 func (a *Aggregator) getPartitionKeys() []string {
@@ -146,11 +182,11 @@ func (a *Aggregator) getPartitionKeys() []string {
 
 // getSize of protobuf records, partitionKeys, magicNumber, and md5sum in bytes
 func (a *Aggregator) getSize() int {
-	return a.aggSize + kclMagicNumberLen + md5.Size + aggProtobufBytes
+	return kclMagicNumberLen + md5.Size + a.aggSize
 }
 
 func (a *Aggregator) clearBuffer() {
 	a.partitionKeys = make(map[string]uint64, 0)
 	a.records = make([]*Record, 0)
-	a.aggSize = 0
+	a.aggSize = initialAggRecordSize
 }
