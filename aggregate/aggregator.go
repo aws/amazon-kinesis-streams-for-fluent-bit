@@ -27,7 +27,7 @@ const (
 // The size in bytes that the protobuf representation will take
 func varint64Size(varint uint64) (size int) {
 	size = 1
-	for varint >= 0x80 {
+	for varint >= 128 {
 		size += 1
 		varint >>= 7;
 	}
