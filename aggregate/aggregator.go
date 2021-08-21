@@ -7,6 +7,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/kinesis"
 	"github.com/sirupsen/logrus"
+	"google.golang.org/protobuf/encoding/protowire"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -22,21 +23,6 @@ const (
 	initialAggRecordSize    = 0
 	fieldNumberSize         = 1 // All field numbers are below 16, meaning they will only take up 1 byte
 )
-
-// Effectively just ceil(log base 128 of int)
-// The size in bytes that the protobuf representation will take
-func varint64Size(varint uint64) (size int) {
-	size = 1
-	for varint >= 0x80 {
-		size += 1
-		varint >>= 7;
-	}
-	return size;
-}
-
-func varintSize(varint int) (size int) {
-	return varint64Size(uint64(varint))
-}
 
 // Aggregator kinesis aggregator
 type Aggregator struct {
@@ -78,13 +64,13 @@ func (a *Aggregator) AddRecord(partitionKey string, data []byte) (entry *kinesis
 	// Check if we need to add a new partition key, and if we do how much space it will take
 	pKeyIdx, pKeyAddedSize := a.checkPartitionKey(partitionKey)
 
-	// data field size is data length + varint of data length size + data field number size
+	// data field size is proto size of data + data field number size
 	// partition key field size is varint of index size + field number size
-	recordSize := dataSize + varintSize(dataSize) + fieldNumberSize + varint64Size(pKeyIdx) + fieldNumberSize
-	// Total size is record size + varint of record size size + field number of parent proto
-	addedSize := recordSize + varintSize(recordSize) + fieldNumberSize
+	recordSize := protowire.SizeBytes(dataSize) + fieldNumberSize + protowire.SizeVarint(pKeyIdx) + fieldNumberSize
+	// Total size is proto size of data + field number of parent proto
+	addedSize := protowire.SizeBytes(recordSize) + fieldNumberSize
 
-	if a.getSize() + addedSize + pKeyAddedSize >= maximumRecordSize {
+	if a.getSize()+addedSize+pKeyAddedSize >= maximumRecordSize {
 		// Aggregate records, and return
 		entry, err = a.AggregateRecords()
 		if err != nil {
@@ -158,7 +144,7 @@ func (a *Aggregator) addPartitionKey(partitionKey string) uint64 {
 	a.partitionKeys[partitionKey] = idx
 
 	partitionKeyLen := len([]byte(partitionKey))
-	a.aggSize += partitionKeyLen + varintSize(partitionKeyLen) + fieldNumberSize
+	a.aggSize += protowire.SizeBytes(partitionKeyLen) + fieldNumberSize
 	return idx
 }
 
@@ -169,7 +155,7 @@ func (a *Aggregator) checkPartitionKey(partitionKey string) (uint64, int) {
 
 	idx := uint64(len(a.partitionKeys))
 	partitionKeyLen := len([]byte(partitionKey))
-	return idx, partitionKeyLen + varintSize(partitionKeyLen) + fieldNumberSize
+	return idx, protowire.SizeBytes(partitionKeyLen) + fieldNumberSize
 }
 
 func (a *Aggregator) getPartitionKeys() []string {
