@@ -2,7 +2,6 @@ package kinesis
 
 import (
 	"encoding/json"
-	"math/rand"
 	"os"
 	"testing"
 	"time"
@@ -10,6 +9,7 @@ import (
 	"github.com/aws/amazon-kinesis-firehose-for-fluent-bit/plugins"
 	"github.com/aws/amazon-kinesis-streams-for-fluent-bit/aggregate"
 	"github.com/aws/amazon-kinesis-streams-for-fluent-bit/kinesis/mock_kinesis"
+	"github.com/aws/amazon-kinesis-streams-for-fluent-bit/util"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/kinesis"
 	fluentbit "github.com/fluent/fluent-bit-go/output"
@@ -29,16 +29,11 @@ func newMockOutputPlugin(client *mock_kinesis.MockPutRecordsClient, isAggregate 
 		os.Exit(1)
 	})
 
-	seededRand := rand.New(rand.NewSource(time.Now().UnixNano()))
-	b := make([]byte, 8)
-	random := &random{
-		seededRandom: seededRand,
-		buffer:       b,
-	}
+	stringGen := util.NewRandomStringGenerator(8)
 
 	var aggregator *aggregate.Aggregator
 	if isAggregate {
-		aggregator = aggregate.NewAggregator()
+		aggregator = aggregate.NewAggregator(stringGen)
 	}
 
 	return &OutputPlugin{
@@ -48,7 +43,7 @@ func newMockOutputPlugin(client *mock_kinesis.MockPutRecordsClient, isAggregate 
 		partitionKey:          "",
 		timer:                 timer,
 		PluginID:              0,
-		random:                random,
+		stringGen:             stringGen,
 		concurrencyRetryLimit: concurrencyRetryLimit,
 		isAggregate:           isAggregate,
 		aggregator:            aggregator,
@@ -102,7 +97,7 @@ func TestTruncateLargeLogEvent(t *testing.T) {
 
 	timeStamp := time.Now()
 	retCode := outputPlugin.AddRecord(&records, record, &timeStamp)
-	actualData, err := outputPlugin.processRecord(record, "testKey")
+	actualData, err := outputPlugin.processRecord(record, len("testKey"))
 	if err != nil {
 		logrus.Errorf("[kinesis %d] %v\n", outputPlugin.PluginID, err)
 	}
@@ -256,28 +251,34 @@ func TestGetPartitionKey(t *testing.T) {
 	//test getPartitionKey() with single partition key
 	outputPlugin, _ := newMockOutputPlugin(nil, false)
 	outputPlugin.partitionKey = "testKey"
-	value := outputPlugin.getPartitionKey(record)
+	value, hasValue := outputPlugin.getPartitionKey(record)
+	assert.Equal(t, true, hasValue, "Should find value")
 	assert.Equal(t, value, "test value with no nested keys")
 
 	//test getPartitionKey() with nested partition key
 	outputPlugin.partitionKey = "testKeyWithOneNestedKey->nestedKey"
-	value = outputPlugin.getPartitionKey(record)
+	value, hasValue = outputPlugin.getPartitionKey(record)
+	assert.Equal(t, true, hasValue, "Should find value")
 	assert.Equal(t, value, "test value with one nested key")
 
 	outputPlugin.partitionKey = "testKeyWithNestedKeys->outerKey->innerKey"
-	value = outputPlugin.getPartitionKey(record)
+	value, hasValue = outputPlugin.getPartitionKey(record)
+	assert.Equal(t, true, hasValue, "Should find value")
 	assert.Equal(t, value, "test value with inner key")
 
 	//test getPartitionKey() with partition key not found
 	outputPlugin.partitionKey = "some key"
-	value = outputPlugin.getPartitionKey(record)
-	assert.Len(t, value, 8, "This should be a random string")
+	value, hasValue = outputPlugin.getPartitionKey(record)
+	assert.Equal(t, false, hasValue, "Should not find value")
+	assert.Len(t, value, 0, "This should be an empty string")
 
 	outputPlugin.partitionKey = "testKeyWithOneNestedKey"
-	value = outputPlugin.getPartitionKey(record)
-	assert.Len(t, value, 8, "This should be a random string")
+	value, hasValue = outputPlugin.getPartitionKey(record)
+	assert.Equal(t, false, hasValue, "Should not find value")
+	assert.Len(t, value, 0, "This should be an empty string")
 
 	outputPlugin.partitionKey = "testKeyWithOneNestedKey->someKey"
-	value = outputPlugin.getPartitionKey(record)
-	assert.Len(t, value, 8, "This should be a random string")
+	value, hasValue = outputPlugin.getPartitionKey(record)
+	assert.Equal(t, false, hasValue, "Should not find value")
+	assert.Len(t, value, 0, "This should be an empty string")
 }
