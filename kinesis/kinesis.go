@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"compress/zlib"
 	"fmt"
-	"math/rand"
 	"os"
 	"strings"
 	"sync/atomic"
@@ -28,6 +27,7 @@ import (
 
 	"github.com/aws/amazon-kinesis-firehose-for-fluent-bit/plugins"
 	"github.com/aws/amazon-kinesis-streams-for-fluent-bit/aggregate"
+	"github.com/aws/amazon-kinesis-streams-for-fluent-bit/util"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/credentials/stscreds"
@@ -42,8 +42,7 @@ import (
 )
 
 const (
-	partitionKeyCharset = "abcdefghijklmnopqrstuvwxyz" + "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-	truncatedSuffix     = "[Truncated...]"
+	truncatedSuffix = "[Truncated...]"
 )
 
 const (
@@ -63,11 +62,6 @@ const (
 // PutRecordsClient contains the kinesis PutRecords method call
 type PutRecordsClient interface {
 	PutRecords(input *kinesis.PutRecordsInput) (*kinesis.PutRecordsOutput, error)
-}
-
-type random struct {
-	seededRandom *rand.Rand
-	buffer       []byte
 }
 
 // CompressionType indicates the type of compression to apply to each record
@@ -98,16 +92,15 @@ type OutputPlugin struct {
 	client                PutRecordsClient
 	timer                 *plugins.Timeout
 	PluginID              int
-	random                *random
+	stringGen             *util.RandomStringGenerator
 	Concurrency           int
 	concurrencyRetryLimit int
 	// Concurrency is the limit, goroutineCount represents the running goroutines
-	goroutineCount int32
+	goroutineCount        int32
 	// Used to implement backoff for concurrent flushes
 	concurrentRetries     uint32
 	isAggregate           bool
 	aggregator            *aggregate.Aggregator
-	aggregatePartitionKey string
 	compression           CompressionType
 	// If specified, dots in key names should be replaced with other symbols
 	replaceDots           string
@@ -130,11 +123,7 @@ func NewOutputPlugin(region, stream, dataKeys, partitionKey, roleARN, kinesisEnd
 		return nil, err
 	}
 
-	seededRand := rand.New(rand.NewSource(time.Now().UnixNano()))
-	random := &random{
-		seededRandom: seededRand,
-		buffer:       make([]byte, 8),
-	}
+	stringGen := util.NewRandomStringGenerator(8)
 
 	var timeFormatter *strftime.Strftime
 	if timeKey != "" {
@@ -150,7 +139,7 @@ func NewOutputPlugin(region, stream, dataKeys, partitionKey, roleARN, kinesisEnd
 
 	var aggregator *aggregate.Aggregator
 	if isAggregate {
-		aggregator = aggregate.NewAggregator()
+		aggregator = aggregate.NewAggregator(stringGen)
 	}
 
 	return &OutputPlugin{
@@ -164,7 +153,7 @@ func NewOutputPlugin(region, stream, dataKeys, partitionKey, roleARN, kinesisEnd
 		logKey:                logKey,
 		timer:                 timer,
 		PluginID:              pluginID,
-		random:                random,
+		stringGen:             stringGen,
 		Concurrency:           concurrency,
 		concurrencyRetryLimit: retryLimit,
 		isAggregate:           isAggregate,
@@ -249,9 +238,12 @@ func (outputPlugin *OutputPlugin) AddRecord(records *[]*kinesis.PutRecordsReques
 		record[outputPlugin.timeKey] = buf.String()
 	}
 
-	partitionKey := outputPlugin.getPartitionKey(record)
-	logrus.Debugf("[kinesis %d] Got value: %s for a given partition key.\n", outputPlugin.PluginID, partitionKey)
-	data, err := outputPlugin.processRecord(record, partitionKey)
+	partitionKey, hasPartitionKey := outputPlugin.getPartitionKey(record)
+	var partitionKeyLen = len(partitionKey)
+	if !hasPartitionKey {
+		partitionKeyLen = outputPlugin.stringGen.Size
+	}
+	data, err := outputPlugin.processRecord(record, partitionKeyLen)
 	if err != nil {
 		logrus.Errorf("[kinesis %d] %v\n", outputPlugin.PluginID, err)
 		// discard this single bad record instead and let the batch continue
@@ -259,13 +251,17 @@ func (outputPlugin *OutputPlugin) AddRecord(records *[]*kinesis.PutRecordsReques
 	}
 
 	if !outputPlugin.isAggregate {
+		if !hasPartitionKey {
+			partitionKey = outputPlugin.stringGen.RandomString()
+		}
+		logrus.Debugf("[kinesis %d] Got value: %s for a given partition key.\n", outputPlugin.PluginID, partitionKey)
 		*records = append(*records, &kinesis.PutRecordsRequestEntry{
 			Data:         data,
 			PartitionKey: aws.String(partitionKey),
 		})
 	} else {
 		// Use the KPL aggregator to buffer records isAggregate is true
-		aggRecord, err := outputPlugin.aggregator.AddRecord(partitionKey, data)
+		aggRecord, err := outputPlugin.aggregator.AddRecord(partitionKey, hasPartitionKey, data)
 		if err != nil {
 			logrus.Errorf("[kinesis %d] Failed to aggregate record %v\n", outputPlugin.PluginID, err)
 			// discard this single bad record instead and let the batch continue
@@ -275,7 +271,6 @@ func (outputPlugin *OutputPlugin) AddRecord(records *[]*kinesis.PutRecordsReques
 		// If aggRecord isn't nil, then a full kinesis record has been aggregated
 		if aggRecord != nil {
 			*records = append(*records, aggRecord)
-			outputPlugin.aggregatePartitionKey = outputPlugin.randomString()
 		}
 	}
 
@@ -294,7 +289,6 @@ func (outputPlugin *OutputPlugin) FlushAggregatedRecords(records *[]*kinesis.Put
 
 	if aggRecord != nil {
 		*records = append(*records, aggRecord)
-		outputPlugin.aggregatePartitionKey = outputPlugin.randomString()
 	}
 
 	return fluentbit.FLB_OK
@@ -426,7 +420,7 @@ func replaceDots(obj map[interface{}]interface{}, replacement string) map[interf
 	return obj
 }
 
-func (outputPlugin *OutputPlugin) processRecord(record map[interface{}]interface{}, partitionKey string) ([]byte, error) {
+func (outputPlugin *OutputPlugin) processRecord(record map[interface{}]interface{}, partitionKeyLen int) ([]byte, error) {
 	if outputPlugin.dataKeys != "" {
 		record = plugins.DataKeys(outputPlugin.dataKeys, record)
 	}
@@ -473,9 +467,9 @@ func (outputPlugin *OutputPlugin) processRecord(record map[interface{}]interface
 		}
 	}
 
-	if len(data)+len(partitionKey) > maximumRecordSize {
-		logrus.Warnf("[kinesis %d] Found record with %d bytes, truncating to 1MB, stream=%s\n", outputPlugin.PluginID, len(data)+len(partitionKey), outputPlugin.stream)
-		data = data[:maximumRecordSize-len(partitionKey)-len(truncatedSuffix)]
+	if len(data)+partitionKeyLen > maximumRecordSize {
+		logrus.Warnf("[kinesis %d] Found record with %d bytes, truncating to 1MB, stream=%s\n", outputPlugin.PluginID, len(data)+partitionKeyLen, outputPlugin.stream)
+		data = data[:maximumRecordSize-partitionKeyLen-len(truncatedSuffix)]
 		data = append(data, []byte(truncatedSuffix)...)
 	}
 
@@ -554,15 +548,6 @@ func (outputPlugin *OutputPlugin) processAPIResponse(records *[]*kinesis.PutReco
 	return retCode, nil
 }
 
-// randomString generates a random string of length 8
-// it uses the math/rand library
-func (outputPlugin *OutputPlugin) randomString() string {
-	for i := range outputPlugin.random.buffer {
-		outputPlugin.random.buffer[i] = partitionKeyCharset[outputPlugin.random.seededRandom.Intn(len(partitionKeyCharset))]
-	}
-	return string(outputPlugin.random.buffer)
-}
-
 func getFromMap(dataKey string, record map[interface{}]interface{}) interface{} {
 	for k, v := range record {
 		currentKey := stringOrByteArray(k)
@@ -575,8 +560,9 @@ func getFromMap(dataKey string, record map[interface{}]interface{}) interface{} 
 }
 
 // getPartitionKey returns the value for a given valid key
-// if the given key is empty or invalid, it returns a random string
-func (outputPlugin *OutputPlugin) getPartitionKey(record map[interface{}]interface{}) string {
+// if the given key is empty or invalid, it returns empty
+// second return value indicates whether a partition key was found or not
+func (outputPlugin *OutputPlugin) getPartitionKey(record map[interface{}]interface{}) (string, bool) {
 	partitionKey := outputPlugin.partitionKey
 	if partitionKey != "" {
 		partitionKeys := strings.Split(partitionKey, "->")
@@ -589,7 +575,7 @@ func (outputPlugin *OutputPlugin) getPartitionKey(record map[interface{}]interfa
 					if len(value) > partitionKeyMaxLength {
 						value = value[0:partitionKeyMaxLength]
 					}
-					return value
+					return value, true
 				}
 			}
 			_, ok := newRecord.(map[interface{}]interface{})
@@ -597,17 +583,11 @@ func (outputPlugin *OutputPlugin) getPartitionKey(record map[interface{}]interfa
 				record = newRecord.(map[interface{}]interface{})
 			} else {
 				logrus.Errorf("[kinesis %d] The partition key could not be found in the record, using a random string instead", outputPlugin.PluginID)
-				return outputPlugin.randomString()
+				return "", false
 			}
 		}
 	}
-	if outputPlugin.isAggregate {
-		if outputPlugin.aggregatePartitionKey == "" {
-			outputPlugin.aggregatePartitionKey = outputPlugin.randomString()
-		}
-		return outputPlugin.aggregatePartitionKey
-	}
-	return outputPlugin.randomString()
+	return "", false
 }
 
 func zlibCompress(data []byte) ([]byte, error) {
