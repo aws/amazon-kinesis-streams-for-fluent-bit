@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.7.2
+* Bug - Fix aggregator size estimation (#155)
+* Bug - Fix partition key computation for aggregation (#158)
+
 ## 1.7.0
 * Feature - Add new option replace_dots to replace dots in key names (#79)
 * Enhancement - Add support for nested partition_key in log record (#30)
