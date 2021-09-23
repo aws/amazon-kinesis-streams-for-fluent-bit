@@ -187,28 +187,19 @@ func TestAddRecordWithConcurrency(t *testing.T) {
 	assert.Equal(t, retCode, fluentbit.FLB_OK, "Expected FlushConcurrent return code to be FLB_OK")
 }
 
-var compressors = map[string]func([]byte) ([]byte, error){
-	"zlib": zlibCompress,
-	"gzip": gzipCompress,
-}
-
-func TestCompression(t *testing.T) {
+func TestZlibCompression(t *testing.T) {
 
 	testData := []byte("Test Data: This is test data for compression.  This data is needs to have with some repetitive values, so compression is effective.")
 
-	for z, f := range compressors {
-		compressedBuf, err := f(testData)
-		assert.Equalf(t, err, nil, "Expected successful %s compression of data", z)
-		assert.Lessf(t, len(compressedBuf), len(testData), "%s compressed data buffer should contain fewer bytes", z)
-	}
+	compressedBuf, err := zlibCompress(testData)
+	assert.Equal(t, err, nil, "Expected successful compression of data")
+	assert.Lessf(t, len(compressedBuf), len(testData), "Compressed data buffer should contain fewer bytes")
 }
 
-func TestCompressionEmpty(t *testing.T) {
+func TestZlibCompressionEmpty(t *testing.T) {
 
-	for z, f := range compressors {
-		_, err := f(nil)
-		assert.NotEqualf(t, err, nil, "%s compressing 'nil' data should return an error", z)
-	}
+	_, err := zlibCompress(nil)
+	assert.NotEqual(t, err, nil, "'nil' data should return an error")
 }
 
 func TestDotReplace(t *testing.T) {

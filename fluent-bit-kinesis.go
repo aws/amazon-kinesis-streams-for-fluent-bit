@@ -152,12 +152,10 @@ func newKinesisOutput(ctx unsafe.Pointer, pluginID int) (*kinesis.OutputPlugin, 
 	var comp kinesis.CompressionType
 	if strings.ToLower(compression) == string(kinesis.CompressionZlib) {
 		comp = kinesis.CompressionZlib
-	} else if strings.ToLower(compression) == string(kinesis.CompressionGzip) {
-		comp = kinesis.CompressionGzip
 	} else if strings.ToLower(compression) == string(kinesis.CompressionNone) || compression == "" {
 		comp = kinesis.CompressionNone
 	} else {
-		return nil, fmt.Errorf("[kinesis %d] Invalid 'compression' value (%s) specified, must be 'zlib', 'gzip', 'none', or undefined", pluginID, compression)
+		return nil, fmt.Errorf("[kinesis %d] Invalid 'compression' value (%s) specified, must be 'zlib', 'none', or undefined", pluginID, compression)
 	}
 
 	return kinesis.NewOutputPlugin(region, stream, dataKeys, partitionKey, roleARN, kinesisEndpoint, stsEndpoint, timeKey, timeKeyFmt, logKey, replaceDots, concurrencyInt, concurrencyRetriesInt, isAggregate, appendNL, comp, pluginID)
