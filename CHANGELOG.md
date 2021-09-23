@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.7.3
+* Enhancement - Upgrade Go version to 1.17
+
 ## 1.7.2
 * Bug - Fix aggregator size estimation (#155)
 * Bug - Fix partition key computation for aggregation (#158)
