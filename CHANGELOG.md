@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.8.0
+* Feature - Add support for gzip compression of records (#162)
+
 ## 1.7.3
 * Enhancement - Upgrade Go version to 1.17
 
