@@ -18,6 +18,7 @@ package kinesis
 
 import (
 	"bytes"
+	"compress/gzip"
 	"compress/zlib"
 	"fmt"
 	"os"
@@ -72,6 +73,8 @@ const (
 	CompressionNone CompressionType = "none"
 	// CompressionZlib enables zlib compression
 	CompressionZlib = "zlib"
+	// CompressionGzip enables gzip compression
+	CompressionGzip = "gzip"
 )
 
 // OutputPlugin sends log records to kinesis
@@ -460,11 +463,15 @@ func (outputPlugin *OutputPlugin) processRecord(record map[interface{}]interface
 		data = append(data, []byte("\n")...)
 	}
 
-	if outputPlugin.compression == CompressionZlib {
+	switch outputPlugin.compression {
+	case CompressionZlib:
 		data, err = zlibCompress(data)
-		if err != nil {
-			return nil, err
-		}
+	case CompressionGzip:
+		data, err = gzipCompress(data)
+	default:
+	}
+	if err != nil {
+		return nil, err
 	}
 
 	if len(data)+partitionKeyLen > maximumRecordSize {
@@ -598,6 +605,26 @@ func zlibCompress(data []byte) ([]byte, error) {
 	}
 
 	zw := zlib.NewWriter(&b)
+	_, err := zw.Write(data)
+	if err != nil {
+		return data, err
+	}
+	err = zw.Close()
+	if err != nil {
+		return data, err
+	}
+
+	return b.Bytes(), nil
+}
+
+func gzipCompress(data []byte) ([]byte, error) {
+	var b bytes.Buffer
+
+	if data == nil {
+		return nil, fmt.Errorf("No data to compress.  'nil' value passed as data")
+	}
+
+	zw := gzip.NewWriter(&b)
 	_, err := zw.Write(data)
 	if err != nil {
 		return data, err
