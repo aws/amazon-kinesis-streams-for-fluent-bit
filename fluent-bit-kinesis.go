@@ -89,6 +89,8 @@ func newKinesisOutput(ctx unsafe.Pointer, pluginID int) (*kinesis.OutputPlugin, 
 	logrus.Infof("[kinesis %d] plugin parameter compression = '%s'", pluginID, compression)
 	replaceDots := output.FLBPluginConfigKey(ctx, "replace_dots")
 	logrus.Infof("[kinesis %d] plugin parameter replace_dots = '%s'", pluginID, replaceDots)
+	httpRequestTimeout := output.FLBPluginConfigKey(ctx, "http_request_timeout")
+	logrus.Infof("[kinesis %d] plugin parameter http_request_timeout = '%s'", pluginID, httpRequestTimeout)
 
 	if stream == "" || region == "" {
 		return nil, fmt.Errorf("[kinesis %d] stream and region are required configuration parameters", pluginID)
@@ -119,13 +121,9 @@ func newKinesisOutput(ctx unsafe.Pointer, pluginID int) (*kinesis.OutputPlugin, 
 	var concurrencyInt, concurrencyRetriesInt int
 	var err error
 	if concurrency != "" {
-		concurrencyInt, err = strconv.Atoi(concurrency)
+		concurrencyInt, err = parseNonNegativeConfig("experimental_concurrency", concurrency, pluginID)
 		if err != nil {
-			logrus.Errorf("[kinesis %d] Invalid 'experimental_concurrency' value %s specified: %v", pluginID, concurrency, err)
 			return nil, err
-		}
-		if concurrencyInt < 0 {
-			return nil, fmt.Errorf("[kinesis %d] Invalid 'experimental_concurrency' value (%s) specified, must be a non-negative number", pluginID, concurrency)
 		}
 
 		if concurrencyInt > maximumConcurrency {
@@ -138,12 +136,9 @@ func newKinesisOutput(ctx unsafe.Pointer, pluginID int) (*kinesis.OutputPlugin, 
 	}
 
 	if concurrencyRetries != "" {
-		concurrencyRetriesInt, err = strconv.Atoi(concurrencyRetries)
+		concurrencyRetriesInt, err = parseNonNegativeConfig("experimental_concurrency_retries", concurrencyRetries, pluginID)
 		if err != nil {
-			return nil, fmt.Errorf("[kinesis %d] Invalid 'experimental_concurrency_retries' value (%s) specified: %v", pluginID, concurrencyRetries, err)
-		}
-		if concurrencyRetriesInt < 0 {
-			return nil, fmt.Errorf("[kinesis %d] Invalid 'experimental_concurrency_retries' value (%s) specified, must be a non-negative number", pluginID, concurrencyRetries)
+			return nil, err
 		}
 	} else {
 		concurrencyRetriesInt = defaultConcurrentRetries
@@ -160,7 +155,27 @@ func newKinesisOutput(ctx unsafe.Pointer, pluginID int) (*kinesis.OutputPlugin, 
 		return nil, fmt.Errorf("[kinesis %d] Invalid 'compression' value (%s) specified, must be 'zlib', 'gzip', 'none', or undefined", pluginID, compression)
 	}
 
-	return kinesis.NewOutputPlugin(region, stream, dataKeys, partitionKey, roleARN, kinesisEndpoint, stsEndpoint, timeKey, timeKeyFmt, logKey, replaceDots, concurrencyInt, concurrencyRetriesInt, isAggregate, appendNL, comp, pluginID)
+	var httpRequestTimeoutDuration time.Duration
+	if httpRequestTimeout != "" {
+		httpRequestTimeoutInt, err := parseNonNegativeConfig("http_request_timeout", httpRequestTimeout, pluginID)
+		if err != nil {
+			return nil, err
+		}
+		httpRequestTimeoutDuration = time.Duration(httpRequestTimeoutInt) * time.Second
+	}
+
+	return kinesis.NewOutputPlugin(region, stream, dataKeys, partitionKey, roleARN, kinesisEndpoint, stsEndpoint, timeKey, timeKeyFmt, logKey, replaceDots, concurrencyInt, concurrencyRetriesInt, isAggregate, appendNL, comp, pluginID, httpRequestTimeoutDuration)
+}
+
+func parseNonNegativeConfig(configName string, configValue string, pluginID int) (int, error) {
+	configValueInt, err := strconv.Atoi(configValue)
+	if err != nil {
+		return 0, fmt.Errorf("[kinesis %d] Invalid '%s' value (%s) specified: %v", pluginID, configName, configValue, err)
+	}
+	if configValueInt < 0 {
+		return 0, fmt.Errorf("[kinesis %d] Invalid '%s' value (%s) specified, must be a non-negative number", pluginID, configName, configValue)
+	}
+	return  configValueInt, nil
 }
 
 // The "export" comments have syntactic meaning

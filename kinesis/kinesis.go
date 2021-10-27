@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"net/http"
 	"os"
 	"strings"
 	"sync/atomic"
@@ -114,8 +115,8 @@ type OutputPlugin struct {
 }
 
 // NewOutputPlugin creates an OutputPlugin object
-func NewOutputPlugin(region, stream, dataKeys, partitionKey, roleARN, kinesisEndpoint, stsEndpoint, timeKey, timeFmt, logKey, replaceDots string, concurrency, retryLimit int, isAggregate, appendNewline bool, compression CompressionType, pluginID int) (*OutputPlugin, error) {
-	client, err := newPutRecordsClient(roleARN, region, kinesisEndpoint, stsEndpoint, pluginID)
+func NewOutputPlugin(region, stream, dataKeys, partitionKey, roleARN, kinesisEndpoint, stsEndpoint, timeKey, timeFmt, logKey, replaceDots string, concurrency, retryLimit int, isAggregate, appendNewline bool, compression CompressionType, pluginID int, httpRequestTimeout time.Duration) (*OutputPlugin, error) {
+	client, err := newPutRecordsClient(roleARN, region, kinesisEndpoint, stsEndpoint, pluginID, httpRequestTimeout)
 	if err != nil {
 		return nil, err
 	}
@@ -171,7 +172,7 @@ func NewOutputPlugin(region, stream, dataKeys, partitionKey, roleARN, kinesisEnd
 }
 
 // newPutRecordsClient creates the Kinesis client for calling the PutRecords method
-func newPutRecordsClient(roleARN string, awsRegion string, kinesisEndpoint string, stsEndpoint string, pluginID int) (*kinesis.Kinesis, error) {
+func newPutRecordsClient(roleARN string, awsRegion string, kinesisEndpoint string, stsEndpoint string, pluginID int, httpRequestTimeout time.Duration) (*kinesis.Kinesis, error) {
 	customResolverFn := func(service, region string, optFns ...func(*endpoints.Options)) (endpoints.ResolvedEndpoint, error) {
 		if service == endpoints.KinesisServiceID && kinesisEndpoint != "" {
 			return endpoints.ResolvedEndpoint{
@@ -184,12 +185,16 @@ func newPutRecordsClient(roleARN string, awsRegion string, kinesisEndpoint strin
 		}
 		return endpoints.DefaultResolver().EndpointFor(service, region, optFns...)
 	}
+	httpClient := &http.Client{
+		Timeout: httpRequestTimeout,
+	}
 
 	// Fetch base credentials
 	baseConfig := &aws.Config{
 		Region:                        aws.String(awsRegion),
 		EndpointResolver:              endpoints.ResolverFunc(customResolverFn),
 		CredentialsChainVerboseErrors: aws.Bool(true),
+		HTTPClient:                    httpClient,
 	}
 
 	sess, err := session.NewSession(baseConfig)
@@ -206,6 +211,7 @@ func newPutRecordsClient(roleARN string, awsRegion string, kinesisEndpoint strin
 		creds := stscreds.NewCredentials(svcSess, eksRole)
 		eksConfig.Credentials = creds
 		eksConfig.Region = aws.String(awsRegion)
+		eksConfig.HTTPClient = httpClient
 		svcConfig = eksConfig
 
 		svcSess, err = session.NewSession(svcConfig)
@@ -219,6 +225,7 @@ func newPutRecordsClient(roleARN string, awsRegion string, kinesisEndpoint strin
 		creds := stscreds.NewCredentials(svcSess, roleARN)
 		stsConfig.Credentials = creds
 		stsConfig.Region = aws.String(awsRegion)
+		stsConfig.HTTPClient = httpClient
 		svcConfig = stsConfig
 
 		svcSess, err = session.NewSession(svcConfig)
