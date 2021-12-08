@@ -2,6 +2,7 @@ package kinesis
 
 import (
 	"encoding/json"
+	"math/rand"
 	"os"
 	"testing"
 	"time"
@@ -209,6 +210,69 @@ func TestCompressionEmpty(t *testing.T) {
 		_, err := f(nil)
 		assert.NotEqualf(t, err, nil, "%s compressing 'nil' data should return an error", z)
 	}
+}
+
+var letterRunes = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+
+func RandStringRunes(n int) string {
+	b := make([]rune, n)
+	for i := range b {
+		b[i] = letterRunes[rand.Intn(len(letterRunes))]
+	}
+	return string(b)
+}
+
+func TestCompressionTruncation(t *testing.T) {
+	deftlvl := logrus.GetLevel();
+	logrus.SetLevel(0);
+
+	rand.Seed(0)
+	testData := []byte(RandStringRunes(4000))
+	testSuffix := "[truncate]"
+	outputPlugin := OutputPlugin{
+		PluginID: 10,
+		stream: "MyStream",
+	}
+	var compressedOutput, err = compressThenTruncate(gzipCompress, testData, 200, []byte(testSuffix), outputPlugin)
+	assert.Nil(t, err)
+	assert.GreaterOrEqual(t, len(compressedOutput), 150)
+	assert.LessOrEqual(t, len(compressedOutput), 200)
+
+	logrus.SetLevel(deftlvl)
+}
+
+func TestCompressionTruncationFailureA(t *testing.T) {
+	deftlvl := logrus.GetLevel();
+	logrus.SetLevel(0);
+
+	rand.Seed(0)
+	testData := []byte(RandStringRunes(4000))
+	testSuffix := "[truncate]"
+	outputPlugin := OutputPlugin{
+		PluginID: 10,
+		stream: "MyStream",
+	}
+	var _, err = compressThenTruncate(gzipCompress, testData, 20, []byte(testSuffix), outputPlugin)
+	assert.Contains(t, err.Error(), "no room for suffix")
+
+	logrus.SetLevel(deftlvl)
+}
+
+func TestCompressionTruncationFailureB(t *testing.T) {
+	deftlvl := logrus.GetLevel();
+	logrus.SetLevel(0);
+
+	rand.Seed(0)
+	testData := []byte{}
+	testSuffix := "[truncate]"
+	outputPlugin := OutputPlugin{
+		PluginID: 10,
+		stream: "MyStream",
+	}
+	var _, err = compressThenTruncate(gzipCompress, testData, 5, []byte(testSuffix), outputPlugin)
+	assert.Contains(t, err.Error(), "compressed empty to large")
+
+	logrus.SetLevel(deftlvl)
 }
 
 func TestDotReplace(t *testing.T) {
