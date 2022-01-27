@@ -20,7 +20,9 @@ import (
 	"bytes"
 	"compress/gzip"
 	"compress/zlib"
+	"errors"
 	"fmt"
+	"math"
 	"os"
 	"strings"
 	"sync/atomic"
@@ -44,6 +46,8 @@ import (
 
 const (
 	truncatedSuffix = "[Truncated...]"
+	truncationReductionPercent = 90
+	truncationCompressionMaxAttempts = 10
 )
 
 const (
@@ -463,11 +467,14 @@ func (outputPlugin *OutputPlugin) processRecord(record map[interface{}]interface
 		data = append(data, []byte("\n")...)
 	}
 
+	// max truncation size
+	maxDataSize := maximumRecordSize-partitionKeyLen
+
 	switch outputPlugin.compression {
 	case CompressionZlib:
-		data, err = zlibCompress(data)
+		data, err = compressThenTruncate(zlibCompress, data, maxDataSize, []byte(truncatedSuffix), *outputPlugin)
 	case CompressionGzip:
-		data, err = gzipCompress(data)
+		data, err = compressThenTruncate(gzipCompress, data, maxDataSize, []byte(truncatedSuffix), *outputPlugin)
 	default:
 	}
 	if err != nil {
@@ -476,7 +483,7 @@ func (outputPlugin *OutputPlugin) processRecord(record map[interface{}]interface
 
 	if len(data)+partitionKeyLen > maximumRecordSize {
 		logrus.Warnf("[kinesis %d] Found record with %d bytes, truncating to 1MB, stream=%s\n", outputPlugin.PluginID, len(data)+partitionKeyLen, outputPlugin.stream)
-		data = data[:maximumRecordSize-partitionKeyLen-len(truncatedSuffix)]
+		data = data[:maxDataSize-len(truncatedSuffix)]
 		data = append(data, []byte(truncatedSuffix)...)
 	}
 
@@ -597,6 +604,9 @@ func (outputPlugin *OutputPlugin) getPartitionKey(record map[interface{}]interfa
 	return "", false
 }
 
+// CompressorFunc is a function that compresses a byte slice
+type CompressorFunc func([]byte) ([]byte, error)
+
 func zlibCompress(data []byte) ([]byte, error) {
 	var b bytes.Buffer
 
@@ -635,6 +645,90 @@ func gzipCompress(data []byte) ([]byte, error) {
 	}
 
 	return b.Bytes(), nil
+}
+
+// Compress Then Truncate
+// compresses data with CompressorFunction and iteratively truncates data
+// adding the truncation suffix if the CompressorFunction output exceeds maxOutLen.
+// The output is compressed and possibly truncated data whose length guaranteed to
+// be less than or equal to maxOutLen.
+func compressThenTruncate(compressorFunc CompressorFunc, data []byte, maxOutLen int, truncatedSuffix []byte, outputPlugin OutputPlugin) ([]byte, error) {
+	var compressedData []byte
+	var truncationBuffer []byte
+	var originalCompressedLen int
+	var compressedLen int
+	var err error
+
+	/* Iterative approach to truncation */
+	isTruncated := false
+	compressedLen = math.MaxInt64
+	truncatedInLen := len(data)
+	truncationBuffer = data
+	truncationCompressionAttempts := 0
+	for (compressedLen > maxOutLen) {
+		compressedData, err = compressorFunc(truncationBuffer)
+		if err != nil {
+			return nil, err
+		}
+		compressedLen = len(compressedData)
+
+		/* Truncation needed */
+		if (compressedLen > maxOutLen) {
+			truncationCompressionAttempts++
+			logrus.Debugf("[kinesis %d] iterative truncation round stream=%s\n",
+						 outputPlugin.PluginID, outputPlugin.stream)
+
+			/* Base case: input compressed empty string, output still too large */
+			if (truncatedInLen == 0) {
+				logrus.Errorf("[kinesis %d] truncation failed, compressed empty input too " +
+							 "large stream=%s\n", outputPlugin.PluginID, outputPlugin.stream)
+				return nil, errors.New("compressed empty to large");
+			}
+
+			/* Base case: too many attempts - just to be extra safe */
+			if (truncationCompressionAttempts > truncationCompressionMaxAttempts) {
+				logrus.Errorf("[kinesis %d] truncation failed, too many compression attempts " +
+							 "stream=%s\n", outputPlugin.PluginID, outputPlugin.stream)
+				return nil, errors.New("too many compression attempts");
+			}
+
+			/* Calculate corrected input size */
+			truncatedInLenPrev := truncatedInLen;
+			truncatedInLen = (maxOutLen * truncatedInLen) / compressedLen;
+			truncatedInLen = (truncatedInLen * truncationReductionPercent) / 100;
+
+			/* Ensure working down */
+			if (truncatedInLen >= truncatedInLenPrev) {
+				truncatedInLen = truncatedInLenPrev - 1;
+			}
+
+			/* Allocate truncation buffer */
+			if (!isTruncated) {
+				isTruncated = true;
+				originalCompressedLen = compressedLen
+				truncationBuffer = make([]byte, truncatedInLen)
+				copy(truncationBuffer, data[:truncatedInLen])
+			}
+
+			/* Slap on truncation suffix */
+			if (truncatedInLen < len(truncatedSuffix)) {
+				/* No room for the truncation suffix. Terminal error */
+				logrus.Errorf("[kinesis %d] truncation failed, no room for suffix " +
+							 "stream=%s\n", outputPlugin.PluginID, outputPlugin.stream)
+				return nil, errors.New("no room for suffix");
+			}
+			truncationBuffer = truncationBuffer[:truncatedInLen]
+			copy(truncationBuffer[len(truncationBuffer)-len(truncatedSuffix):], truncatedSuffix)
+		}
+	}
+
+	if (isTruncated) {
+		logrus.Warnf("[kinesis %d] Found compressed record with %d bytes, " +
+					 "truncating to %d bytes after compression, stream=%s\n",
+					 outputPlugin.PluginID, originalCompressedLen, len(compressedData), outputPlugin.stream)
+	}
+
+	return compressedData, nil
 }
 
 // stringOrByteArray returns the string value if the input is a string or byte array otherwise an empty string
