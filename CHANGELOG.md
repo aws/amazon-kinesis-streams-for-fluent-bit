@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.8.1
+* Bug - Fix truncation issue after compression (#183)
+
 ## 1.8.0
 * Feature - Add support for gzip compression of records (#162)
 
