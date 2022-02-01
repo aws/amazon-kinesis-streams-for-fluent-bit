@@ -358,7 +358,7 @@ func (outputPlugin *OutputPlugin) FlushWithRetries(count int, records []*kinesis
 	currentRetries := outputPlugin.getConcurrentRetries()
 	outputPlugin.addGoroutineCount(1)
 
-	for tries = 0; tries < outputPlugin.concurrencyRetryLimit; tries++ {
+	for tries = 0; tries <= outputPlugin.concurrencyRetryLimit; tries++ {
 		if currentRetries > 0 {
 			// Wait if other goroutines are retrying, as well as implement a progressive backoff
 			if currentRetries > uint32(outputPlugin.concurrencyRetryLimit) {
