@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"math/rand"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -116,6 +117,7 @@ func TestAddRecordAndFlush(t *testing.T) {
 	}
 
 	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 	mockKinesis := mock_kinesis.NewMockPutRecordsClient(ctrl)
 
 	mockKinesis.EXPECT().PutRecords(gomock.Any()).Return(&kinesis.PutRecordsOutput{
@@ -140,6 +142,7 @@ func TestAddRecordAndFlushAggregate(t *testing.T) {
 	}
 
 	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 	mockKinesis := mock_kinesis.NewMockPutRecordsClient(ctrl)
 
 	mockKinesis.EXPECT().PutRecords(gomock.Any()).Return(&kinesis.PutRecordsOutput{
@@ -170,15 +173,60 @@ func TestAddRecordWithConcurrency(t *testing.T) {
 	}
 
 	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 	mockKinesis := mock_kinesis.NewMockPutRecordsClient(ctrl)
+	// Need to use synchronization to ensure goroutine completes before test method exits
+	var wg sync.WaitGroup
+	wg.Add(1)
+	defer wg.Wait()
 
-	mockKinesis.EXPECT().PutRecords(gomock.Any()).Return(&kinesis.PutRecordsOutput{
-		FailedRecordCount: aws.Int64(0),
-	}, nil)
+	mockKinesis.EXPECT().PutRecords(gomock.Any()).DoAndReturn(
+		func(arg0 *kinesis.PutRecordsInput) (*kinesis.PutRecordsOutput, error) {
+			wg.Done()
+			return &kinesis.PutRecordsOutput{
+				FailedRecordCount: aws.Int64(0),
+			}, nil
+		})
 
 	outputPlugin, _ := newMockOutputPlugin(mockKinesis, false)
 	// Enable concurrency
 	outputPlugin.Concurrency = 2
+
+	timeStamp := time.Now()
+	retCode := outputPlugin.AddRecord(&records, record, &timeStamp)
+	assert.Equal(t, retCode, fluentbit.FLB_OK, "Expected AddRecord return code to be FLB_OK")
+
+	retCode = outputPlugin.FlushConcurrent(len(records), records)
+	assert.Equal(t, retCode, fluentbit.FLB_OK, "Expected FlushConcurrent return code to be FLB_OK")
+}
+
+func TestAddRecordWithConcurrencyNoRetries(t *testing.T) {
+	records := make([]*kinesis.PutRecordsRequestEntry, 0, 500)
+
+	record := map[interface{}]interface{}{
+		"testkey": []byte("test value"),
+	}
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mockKinesis := mock_kinesis.NewMockPutRecordsClient(ctrl)
+	// Need to use synchronization to ensure goroutine completes before test method exits
+	var wg sync.WaitGroup
+	wg.Add(1)
+	defer wg.Wait()
+
+	mockKinesis.EXPECT().PutRecords(gomock.Any()).DoAndReturn(
+		func(arg0 *kinesis.PutRecordsInput) (*kinesis.PutRecordsOutput, error) {
+			wg.Done()
+			return &kinesis.PutRecordsOutput{
+				FailedRecordCount: aws.Int64(0),
+			}, nil
+		})
+
+	outputPlugin, _ := newMockOutputPlugin(mockKinesis, false)
+	// Enable concurrency but no retries
+	outputPlugin.Concurrency = 2
+	outputPlugin.concurrencyRetryLimit = 0
 
 	timeStamp := time.Now()
 	retCode := outputPlugin.AddRecord(&records, record, &timeStamp)
