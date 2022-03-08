@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.0
+* Feature - Add timeout config for AWS SDK Go HTTP calls (#178)
+* Bug - Fix message loss issue using concurrency feature with 0 retries (#179)
+
 ## 1.8.1
 * Bug - Fix truncation issue after compression (#183)
 
