@@ -12,7 +12,7 @@ require (
 	github.com/lestrrat-go/strftime v1.0.6
 	github.com/sirupsen/logrus v1.8.1
 	github.com/stretchr/testify v1.7.5
-	google.golang.org/protobuf v1.27.1
+	google.golang.org/protobuf v1.28.0
 )
 
 require (
