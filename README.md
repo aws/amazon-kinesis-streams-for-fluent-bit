@@ -7,6 +7,28 @@ A Fluent Bit output plugin for Amazon Kinesis Data Streams.
 
 If you think you’ve found a potential security issue, please do not post it in the Issues.  Instead, please follow the instructions [here](https://aws.amazon.com/security/vulnerability-reporting/) or email AWS security directly at [aws-security@amazon.com](mailto:aws-security@amazon.com).
 
+### Usage
+
+Run `make` to build `./bin/kinesis.so`. Then use with Fluent Bit:
+```
+./fluent-bit -e ./kinesis.so -i cpu \
+-o kinesis \
+-p "region=us-west-2" \
+-p "stream=test-stream"
+```
+
+For building Windows binaries, we need to install `mingw-64w` for cross-compilation. The same can be done using-
+```
+sudo apt-get install -y gcc-multilib gcc-mingw-w64
+```
+After this step, run `make windows-release`. Then use with Fluent Bit on Windows:
+```
+./fluent-bit.exe -e ./kinesis.dll -i dummy `
+-o kinesis `
+-p "region=us-west-2" `
+-p "stream=test-stream"
+```
+
 ### Plugin Options
 
 * `region`: The region which your Kinesis Data Stream is in.
