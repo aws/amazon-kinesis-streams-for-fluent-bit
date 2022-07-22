@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.10.0
+* Feature - Add support for building this plugin on Windows. *Note that this is only support in this plugin repo for Windows compilation.*
+
 ## 1.9.0
 * Feature - Add timeout config for AWS SDK Go HTTP calls (#178)
 * Bug - Fix message loss issue using concurrency feature with 0 retries (#179)
