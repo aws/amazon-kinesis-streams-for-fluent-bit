@@ -11,7 +11,7 @@
 // express or implied. See the License for the specific language governing
 // permissions and limitations under the License.
 
-//go:generate mockgen -destination mock_kinesis/mock_kinesis.go -copyright_file=../COPYRIGHT github.com/aws/amazon-kinesis-streams-for-fluent-bit/kinesis PutRecordsClient
+//go:generate mockgen -destination mock_kinesis/mock_kinesis.go -copyright_file=../COPYRIGHT github.com/canva/amazon-kinesis-streams-for-fluent-bit/kinesis PutRecordsClient
 
 // Package kinesis contains the OutputPlugin which sends log records to Kinesis Stream
 package kinesis
@@ -30,8 +30,6 @@ import (
 	"time"
 
 	"github.com/aws/amazon-kinesis-firehose-for-fluent-bit/plugins"
-	"github.com/aws/amazon-kinesis-streams-for-fluent-bit/aggregate"
-	"github.com/aws/amazon-kinesis-streams-for-fluent-bit/util"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/credentials/stscreds"
@@ -43,6 +41,10 @@ import (
 	jsoniter "github.com/json-iterator/go"
 	"github.com/lestrrat-go/strftime"
 	"github.com/sirupsen/logrus"
+
+	"github.com/canva/amazon-kinesis-streams-for-fluent-bit/util"
+
+	"github.com/canva/amazon-kinesis-streams-for-fluent-bit/aggregate"
 )
 
 const (

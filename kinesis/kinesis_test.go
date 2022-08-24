@@ -9,15 +9,18 @@ import (
 	"time"
 
 	"github.com/aws/amazon-kinesis-firehose-for-fluent-bit/plugins"
-	"github.com/aws/amazon-kinesis-streams-for-fluent-bit/aggregate"
-	"github.com/aws/amazon-kinesis-streams-for-fluent-bit/kinesis/mock_kinesis"
-	"github.com/aws/amazon-kinesis-streams-for-fluent-bit/util"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/kinesis"
 	fluentbit "github.com/fluent/fluent-bit-go/output"
 	"github.com/golang/mock/gomock"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/canva/amazon-kinesis-streams-for-fluent-bit/util"
+
+	"github.com/canva/amazon-kinesis-streams-for-fluent-bit/kinesis/mock_kinesis"
+
+	"github.com/canva/amazon-kinesis-streams-for-fluent-bit/aggregate"
 )
 
 const concurrencyRetryLimit = 4

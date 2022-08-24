@@ -4,12 +4,13 @@ import (
 	"crypto/md5"
 	"fmt"
 
-	"github.com/aws/amazon-kinesis-streams-for-fluent-bit/util"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/kinesis"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/encoding/protowire"
 	"google.golang.org/protobuf/proto"
+
+	"github.com/canva/amazon-kinesis-streams-for-fluent-bit/util"
 )
 
 var (

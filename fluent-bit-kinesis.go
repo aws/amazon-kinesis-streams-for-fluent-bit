@@ -22,10 +22,11 @@ import (
 	"unsafe"
 
 	"github.com/aws/amazon-kinesis-firehose-for-fluent-bit/plugins"
-	"github.com/aws/amazon-kinesis-streams-for-fluent-bit/kinesis"
 	kinesisAPI "github.com/aws/aws-sdk-go/service/kinesis"
 	"github.com/fluent/fluent-bit-go/output"
 	"github.com/sirupsen/logrus"
+
+	"github.com/canva/amazon-kinesis-streams-for-fluent-bit/kinesis"
 )
 
 const (

@@ -1,4 +1,4 @@
-module github.com/aws/amazon-kinesis-streams-for-fluent-bit
+module github.com/canva/amazon-kinesis-streams-for-fluent-bit
 
 go 1.17
 

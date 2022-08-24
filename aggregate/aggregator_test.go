@@ -3,8 +3,9 @@ package aggregate
 import (
 	"testing"
 
-	"github.com/aws/amazon-kinesis-streams-for-fluent-bit/util"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/canva/amazon-kinesis-streams-for-fluent-bit/util"
 )
 
 const concurrencyRetryLimit = 4
