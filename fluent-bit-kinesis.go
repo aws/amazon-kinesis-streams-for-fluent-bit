@@ -92,6 +92,11 @@ func newKinesisOutput(ctx unsafe.Pointer, pluginID int) (*kinesis.OutputPlugin, 
 	httpRequestTimeout := output.FLBPluginConfigKey(ctx, "http_request_timeout")
 	logrus.Infof("[kinesis %d] plugin parameter http_request_timeout = '%s'", pluginID, httpRequestTimeout)
 
+	aggregationMaximumRecordSize := output.FLBPluginConfigKey(ctx, "aggregation_maximum_record_size")
+	logrus.Infof("[kinesis %d] plugin parameter aggregation_maximum_record_size = %q", pluginID, aggregationMaximumRecordSize)
+	skipAggregationRecordSize := output.FLBPluginConfigKey(ctx, "skip_aggregation_record_size")
+	logrus.Infof("[kinesis %d] plugin parameter skip_aggregation_record_size = %q", pluginID, skipAggregationRecordSize)
+
 	if stream == "" || region == "" {
 		return nil, fmt.Errorf("[kinesis %d] stream and region are required configuration parameters", pluginID)
 	}
@@ -164,7 +169,26 @@ func newKinesisOutput(ctx unsafe.Pointer, pluginID int) (*kinesis.OutputPlugin, 
 		httpRequestTimeoutDuration = time.Duration(httpRequestTimeoutInt) * time.Second
 	}
 
-	return kinesis.NewOutputPlugin(region, stream, dataKeys, partitionKey, roleARN, kinesisEndpoint, stsEndpoint, timeKey, timeKeyFmt, logKey, replaceDots, concurrencyInt, concurrencyRetriesInt, isAggregate, appendNL, comp, pluginID, httpRequestTimeoutDuration)
+	var (
+		aggregationMaximumRecordSizeInt *int
+		skipAggregationRecordSizeInt    *int
+	)
+	if aggregationMaximumRecordSize != "" {
+		intVal, err := parseNonNegativeConfig("aggregation_maximum_record_size", aggregationMaximumRecordSize, pluginID)
+		if err != nil {
+			return nil, err
+		}
+		aggregationMaximumRecordSizeInt = &intVal
+	}
+	if skipAggregationRecordSize != "" {
+		intVal, err := parseNonNegativeConfig("skip_aggregation_record_size", skipAggregationRecordSize, pluginID)
+		if err != nil {
+			return nil, err
+		}
+		skipAggregationRecordSizeInt = &intVal
+	}
+
+	return kinesis.NewOutputPlugin(region, stream, dataKeys, partitionKey, roleARN, kinesisEndpoint, stsEndpoint, timeKey, timeKeyFmt, logKey, replaceDots, concurrencyInt, concurrencyRetriesInt, isAggregate, appendNL, comp, pluginID, httpRequestTimeoutDuration, aggregationMaximumRecordSizeInt, skipAggregationRecordSizeInt)
 }
 
 func parseNonNegativeConfig(configName string, configValue string, pluginID int) (int, error) {
@@ -175,7 +199,7 @@ func parseNonNegativeConfig(configName string, configValue string, pluginID int)
 	if configValueInt < 0 {
 		return 0, fmt.Errorf("[kinesis %d] Invalid '%s' value (%s) specified, must be a non-negative number", pluginID, configName, configValue)
 	}
-	return  configValueInt, nil
+	return configValueInt, nil
 }
 
 // The "export" comments have syntactic meaning

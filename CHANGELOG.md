@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.10.1
+* Feature - Make maximum aggregation size configurable.
+
 ## 1.10.0
 * Feature - Add support for building this plugin on Windows. *Note that this is only support in this plugin repo for Windows compilation.*
 

@@ -35,7 +35,7 @@ func newMockOutputPlugin(client *mock_kinesis.MockPutRecordsClient, isAggregate 
 
 	var aggregator *aggregate.Aggregator
 	if isAggregate {
-		aggregator = aggregate.NewAggregator(stringGen)
+		aggregator = aggregate.NewAggregator(stringGen, &aggregate.Config{})
 	}
 
 	return &OutputPlugin{
@@ -271,15 +271,15 @@ func RandStringRunes(n int) string {
 }
 
 func TestCompressionTruncation(t *testing.T) {
-	deftlvl := logrus.GetLevel();
-	logrus.SetLevel(0);
+	deftlvl := logrus.GetLevel()
+	logrus.SetLevel(0)
 
 	rand.Seed(0)
 	testData := []byte(RandStringRunes(4000))
 	testSuffix := "[truncate]"
 	outputPlugin := OutputPlugin{
 		PluginID: 10,
-		stream: "MyStream",
+		stream:   "MyStream",
 	}
 	var compressedOutput, err = compressThenTruncate(gzipCompress, testData, 200, []byte(testSuffix), outputPlugin)
 	assert.Nil(t, err)
@@ -290,15 +290,15 @@ func TestCompressionTruncation(t *testing.T) {
 }
 
 func TestCompressionTruncationFailureA(t *testing.T) {
-	deftlvl := logrus.GetLevel();
-	logrus.SetLevel(0);
+	deftlvl := logrus.GetLevel()
+	logrus.SetLevel(0)
 
 	rand.Seed(0)
 	testData := []byte(RandStringRunes(4000))
 	testSuffix := "[truncate]"
 	outputPlugin := OutputPlugin{
 		PluginID: 10,
-		stream: "MyStream",
+		stream:   "MyStream",
 	}
 	var _, err = compressThenTruncate(gzipCompress, testData, 20, []byte(testSuffix), outputPlugin)
 	assert.Contains(t, err.Error(), "no room for suffix")
@@ -307,15 +307,15 @@ func TestCompressionTruncationFailureA(t *testing.T) {
 }
 
 func TestCompressionTruncationFailureB(t *testing.T) {
-	deftlvl := logrus.GetLevel();
-	logrus.SetLevel(0);
+	deftlvl := logrus.GetLevel()
+	logrus.SetLevel(0)
 
 	rand.Seed(0)
 	testData := []byte{}
 	testSuffix := "[truncate]"
 	outputPlugin := OutputPlugin{
 		PluginID: 10,
-		stream: "MyStream",
+		stream:   "MyStream",
 	}
 	var _, err = compressThenTruncate(gzipCompress, testData, 5, []byte(testSuffix), outputPlugin)
 	assert.Contains(t, err.Error(), "compressed empty to large")
