@@ -11,7 +11,7 @@ const concurrencyRetryLimit = 4
 
 func TestAddRecordCalculatesCorrectSize(t *testing.T) {
 	generator := util.NewRandomStringGenerator(18)
-	aggregator := NewAggregator(generator)
+	aggregator := NewAggregator(generator, &Config{})
 
 	_, err := aggregator.AddRecord("", false, []byte("test value"))
 	assert.Equal(t, nil, err, "Expected aggregator not to return error")
@@ -24,7 +24,7 @@ func TestAddRecordCalculatesCorrectSize(t *testing.T) {
 
 func TestAddRecordDoesNotAddNewRandomPartitionKey(t *testing.T) {
 	generator := util.NewRandomStringGenerator(18)
-	aggregator := NewAggregator(generator)
+	aggregator := NewAggregator(generator, &Config{})
 
 	_, err := aggregator.AddRecord("", false, []byte("test value"))
 	assert.Equal(t, nil, err, "Expected aggregator not to return error")

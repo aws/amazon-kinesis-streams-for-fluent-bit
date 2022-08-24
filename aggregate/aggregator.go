@@ -19,31 +19,46 @@ var (
 )
 
 const (
-	maximumRecordSize       = 1024 * 1024 // 1 MB
-	defaultMaxAggRecordSize = 20 * 1024   // 20K
-	initialAggRecordSize    = 0
-	fieldNumberSize         = 1 // All field numbers are below 16, meaning they will only take up 1 byte
+	defaultMaximumRecordSize = 1024 * 1024 // 1 MB
+	defaultMaxAggRecordSize  = 20 * 1024   // 20K
+	initialAggRecordSize     = 0
+	fieldNumberSize          = 1 // All field numbers are below 16, meaning they will only take up 1 byte
 )
 
 // Aggregator kinesis aggregator
 type Aggregator struct {
-	partitionKeys    map[string]uint64
-	records          []*Record
-	aggSize          int // Size of both records, and partitionKeys in bytes
-	maxAggRecordSize int
-	stringGen        *util.RandomStringGenerator
+	partitionKeys     map[string]uint64
+	records           []*Record
+	aggSize           int // Size of both records, and partitionKeys in bytes
+	maximumRecordSize int
+	maxAggRecordSize  int
+	stringGen         *util.RandomStringGenerator
+}
+
+// Config is for aggregation customizations.
+type Config struct {
+	MaximumRecordSize *int
+	MaxAggRecordSize  *int
 }
 
 // NewAggregator create a new aggregator
-func NewAggregator(stringGen *util.RandomStringGenerator) *Aggregator {
-
-	return &Aggregator{
+func NewAggregator(stringGen *util.RandomStringGenerator, cfg *Config) *Aggregator {
+	a := &Aggregator{
 		partitionKeys:    make(map[string]uint64, 0),
 		records:          make([]*Record, 0),
 		maxAggRecordSize: defaultMaxAggRecordSize,
 		aggSize:          initialAggRecordSize,
 		stringGen:        stringGen,
 	}
+
+	if cfg.MaximumRecordSize != nil {
+		a.maximumRecordSize = *cfg.MaximumRecordSize
+	}
+	if cfg.MaxAggRecordSize != nil {
+		a.maxAggRecordSize = *cfg.MaxAggRecordSize
+	}
+
+	return a
 }
 
 // AddRecord to the aggregate buffer.
@@ -91,7 +106,7 @@ func (a *Aggregator) AddRecord(partitionKey string, hasPartitionKey bool, data [
 	pkeyFieldSize := protowire.SizeVarint(pKeyIdx) + fieldNumberSize
 	// Total size is byte size of data + pkey field + field number of parent proto
 
-	if a.getSize()+protowire.SizeBytes(dataFieldSize+pkeyFieldSize)+fieldNumberSize+pKeyAddedSize >= maximumRecordSize {
+	if a.getSize()+protowire.SizeBytes(dataFieldSize+pkeyFieldSize)+fieldNumberSize+pKeyAddedSize >= defaultMaximumRecordSize {
 		// Aggregate records, and return if error
 		entry, err = a.AggregateRecords()
 		if err != nil {

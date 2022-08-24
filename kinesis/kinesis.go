@@ -46,8 +46,8 @@ import (
 )
 
 const (
-	truncatedSuffix = "[Truncated...]"
-	truncationReductionPercent = 90
+	truncatedSuffix                  = "[Truncated...]"
+	truncationReductionPercent       = 90
 	truncationCompressionMaxAttempts = 10
 )
 
@@ -104,18 +104,18 @@ type OutputPlugin struct {
 	Concurrency           int
 	concurrencyRetryLimit int
 	// Concurrency is the limit, goroutineCount represents the running goroutines
-	goroutineCount        int32
+	goroutineCount int32
 	// Used to implement backoff for concurrent flushes
-	concurrentRetries     uint32
-	isAggregate           bool
-	aggregator            *aggregate.Aggregator
-	compression           CompressionType
+	concurrentRetries uint32
+	isAggregate       bool
+	aggregator        *aggregate.Aggregator
+	compression       CompressionType
 	// If specified, dots in key names should be replaced with other symbols
-	replaceDots           string
+	replaceDots string
 }
 
 // NewOutputPlugin creates an OutputPlugin object
-func NewOutputPlugin(region, stream, dataKeys, partitionKey, roleARN, kinesisEndpoint, stsEndpoint, timeKey, timeFmt, logKey, replaceDots string, concurrency, retryLimit int, isAggregate, appendNewline bool, compression CompressionType, pluginID int, httpRequestTimeout time.Duration) (*OutputPlugin, error) {
+func NewOutputPlugin(region, stream, dataKeys, partitionKey, roleARN, kinesisEndpoint, stsEndpoint, timeKey, timeFmt, logKey, replaceDots string, concurrency, retryLimit int, isAggregate, appendNewline bool, compression CompressionType, pluginID int, httpRequestTimeout time.Duration, aggregationMaximumRecordSize, skipAggregationRecordSize *int) (*OutputPlugin, error) {
 	client, err := newPutRecordsClient(roleARN, region, kinesisEndpoint, stsEndpoint, pluginID, httpRequestTimeout)
 	if err != nil {
 		return nil, err
@@ -147,7 +147,10 @@ func NewOutputPlugin(region, stream, dataKeys, partitionKey, roleARN, kinesisEnd
 
 	var aggregator *aggregate.Aggregator
 	if isAggregate {
-		aggregator = aggregate.NewAggregator(stringGen)
+		aggregator = aggregate.NewAggregator(stringGen, &aggregate.Config{
+			MaximumRecordSize: aggregationMaximumRecordSize,
+			MaxAggRecordSize:  skipAggregationRecordSize,
+		})
 	}
 
 	return &OutputPlugin{
@@ -475,7 +478,7 @@ func (outputPlugin *OutputPlugin) processRecord(record map[interface{}]interface
 	}
 
 	// max truncation size
-	maxDataSize := maximumRecordSize-partitionKeyLen
+	maxDataSize := maximumRecordSize - partitionKeyLen
 
 	switch outputPlugin.compression {
 	case CompressionZlib:
@@ -672,7 +675,7 @@ func compressThenTruncate(compressorFunc CompressorFunc, data []byte, maxOutLen 
 	truncatedInLen := len(data)
 	truncationBuffer = data
 	truncationCompressionAttempts := 0
-	for (compressedLen > maxOutLen) {
+	for compressedLen > maxOutLen {
 		compressedData, err = compressorFunc(truncationBuffer)
 		if err != nil {
 			return nil, err
@@ -680,59 +683,59 @@ func compressThenTruncate(compressorFunc CompressorFunc, data []byte, maxOutLen 
 		compressedLen = len(compressedData)
 
 		/* Truncation needed */
-		if (compressedLen > maxOutLen) {
+		if compressedLen > maxOutLen {
 			truncationCompressionAttempts++
 			logrus.Debugf("[kinesis %d] iterative truncation round stream=%s\n",
-						 outputPlugin.PluginID, outputPlugin.stream)
+				outputPlugin.PluginID, outputPlugin.stream)
 
 			/* Base case: input compressed empty string, output still too large */
-			if (truncatedInLen == 0) {
-				logrus.Errorf("[kinesis %d] truncation failed, compressed empty input too " +
-							 "large stream=%s\n", outputPlugin.PluginID, outputPlugin.stream)
-				return nil, errors.New("compressed empty to large");
+			if truncatedInLen == 0 {
+				logrus.Errorf("[kinesis %d] truncation failed, compressed empty input too "+
+					"large stream=%s\n", outputPlugin.PluginID, outputPlugin.stream)
+				return nil, errors.New("compressed empty to large")
 			}
 
 			/* Base case: too many attempts - just to be extra safe */
-			if (truncationCompressionAttempts > truncationCompressionMaxAttempts) {
-				logrus.Errorf("[kinesis %d] truncation failed, too many compression attempts " +
-							 "stream=%s\n", outputPlugin.PluginID, outputPlugin.stream)
-				return nil, errors.New("too many compression attempts");
+			if truncationCompressionAttempts > truncationCompressionMaxAttempts {
+				logrus.Errorf("[kinesis %d] truncation failed, too many compression attempts "+
+					"stream=%s\n", outputPlugin.PluginID, outputPlugin.stream)
+				return nil, errors.New("too many compression attempts")
 			}
 
 			/* Calculate corrected input size */
-			truncatedInLenPrev := truncatedInLen;
-			truncatedInLen = (maxOutLen * truncatedInLen) / compressedLen;
-			truncatedInLen = (truncatedInLen * truncationReductionPercent) / 100;
+			truncatedInLenPrev := truncatedInLen
+			truncatedInLen = (maxOutLen * truncatedInLen) / compressedLen
+			truncatedInLen = (truncatedInLen * truncationReductionPercent) / 100
 
 			/* Ensure working down */
-			if (truncatedInLen >= truncatedInLenPrev) {
-				truncatedInLen = truncatedInLenPrev - 1;
+			if truncatedInLen >= truncatedInLenPrev {
+				truncatedInLen = truncatedInLenPrev - 1
 			}
 
 			/* Allocate truncation buffer */
-			if (!isTruncated) {
-				isTruncated = true;
+			if !isTruncated {
+				isTruncated = true
 				originalCompressedLen = compressedLen
 				truncationBuffer = make([]byte, truncatedInLen)
 				copy(truncationBuffer, data[:truncatedInLen])
 			}
 
 			/* Slap on truncation suffix */
-			if (truncatedInLen < len(truncatedSuffix)) {
+			if truncatedInLen < len(truncatedSuffix) {
 				/* No room for the truncation suffix. Terminal error */
-				logrus.Errorf("[kinesis %d] truncation failed, no room for suffix " +
-							 "stream=%s\n", outputPlugin.PluginID, outputPlugin.stream)
-				return nil, errors.New("no room for suffix");
+				logrus.Errorf("[kinesis %d] truncation failed, no room for suffix "+
+					"stream=%s\n", outputPlugin.PluginID, outputPlugin.stream)
+				return nil, errors.New("no room for suffix")
 			}
 			truncationBuffer = truncationBuffer[:truncatedInLen]
 			copy(truncationBuffer[len(truncationBuffer)-len(truncatedSuffix):], truncatedSuffix)
 		}
 	}
 
-	if (isTruncated) {
-		logrus.Warnf("[kinesis %d] Found compressed record with %d bytes, " +
-					 "truncating to %d bytes after compression, stream=%s\n",
-					 outputPlugin.PluginID, originalCompressedLen, len(compressedData), outputPlugin.stream)
+	if isTruncated {
+		logrus.Warnf("[kinesis %d] Found compressed record with %d bytes, "+
+			"truncating to %d bytes after compression, stream=%s\n",
+			outputPlugin.PluginID, originalCompressedLen, len(compressedData), outputPlugin.stream)
 	}
 
 	return compressedData, nil

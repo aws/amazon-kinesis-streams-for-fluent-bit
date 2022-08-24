@@ -48,6 +48,8 @@ After this step, run `make windows-release`. Then use with Fluent Bit on Windows
 * `compression`: Specify an algorithm for compression of each record. Supported compression algorithms are `zlib` and `gzip`. By default this feature is disabled and records are not compressed.
 * `replace_dots`: Replace dot characters in key names with the value of this option. For example, if you add `replace_dots _` in your config then all occurrences of `.` will be replaced with an underscore. By default, dots will not be replaced.
 * `http_request_timeout`: Specify a timeout (in seconds) for the underlying AWS SDK Go HTTP call when sending records to Kinesis. By default, a timeout of `0` is used, indicating no timeout. Note that even with no timeout, the default behavior of the AWS SDK Go library may still lead to an eventual timeout.
+* `aggregation_maximum_record_size` defines aggregation maximum record size. Default is 1MB.
+* `skip_aggregation_record_size` defines max record size that should be included in an aggregation. Default is 20KB.
 
 ### Permissions
 
