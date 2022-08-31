@@ -26,6 +26,7 @@ import (
 	"github.com/fluent/fluent-bit-go/output"
 	"github.com/sirupsen/logrus"
 
+	"github.com/canva/amazon-kinesis-streams-for-fluent-bit/enricher"
 	"github.com/canva/amazon-kinesis-streams-for-fluent-bit/kinesis"
 )
 
@@ -272,6 +273,8 @@ func unpackRecords(kinesisOutput *kinesis.OutputPlugin, data unsafe.Pointer, len
 		default:
 			timestamp = time.Now()
 		}
+
+		record = enricher.EnrichRecord(record, timestamp)
 
 		retCode := kinesisOutput.AddRecord(&records, record, &timestamp)
 		if retCode != output.FLB_OK {
