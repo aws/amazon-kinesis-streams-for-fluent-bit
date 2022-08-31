@@ -26,6 +26,7 @@ import (
 	"github.com/fluent/fluent-bit-go/output"
 	"github.com/sirupsen/logrus"
 
+	"github.com/canva/amazon-kinesis-streams-for-fluent-bit/enricher"
 	"github.com/canva/amazon-kinesis-streams-for-fluent-bit/kinesis"
 )
 
@@ -97,6 +98,9 @@ func newKinesisOutput(ctx unsafe.Pointer, pluginID int) (*kinesis.OutputPlugin, 
 	logrus.Infof("[kinesis %d] plugin parameter aggregation_maximum_record_size = %q", pluginID, aggregationMaximumRecordSize)
 	skipAggregationRecordSize := output.FLBPluginConfigKey(ctx, "skip_aggregation_record_size")
 	logrus.Infof("[kinesis %d] plugin parameter skip_aggregation_record_size = %q", pluginID, skipAggregationRecordSize)
+
+	enrichRecords := output.FLBPluginConfigKey(ctx, "enrich_records")
+	logrus.Infof("[kinesis %d] plugin parameter enrich_records = %q", pluginID, enrichRecords)
 
 	if stream == "" || region == "" {
 		return nil, fmt.Errorf("[kinesis %d] stream and region are required configuration parameters", pluginID)
@@ -189,6 +193,12 @@ func newKinesisOutput(ctx unsafe.Pointer, pluginID int) (*kinesis.OutputPlugin, 
 		skipAggregationRecordSizeInt = &intVal
 	}
 
+	enricherEnable := false
+	if strings.ToLower(enrichRecords) == "true" {
+		enricherEnable = true
+	}
+	enricher.Init(enricherEnable)
+
 	return kinesis.NewOutputPlugin(region, stream, dataKeys, partitionKey, roleARN, kinesisEndpoint, stsEndpoint, timeKey, timeKeyFmt, logKey, replaceDots, concurrencyInt, concurrencyRetriesInt, isAggregate, appendNL, comp, pluginID, httpRequestTimeoutDuration, aggregationMaximumRecordSizeInt, skipAggregationRecordSizeInt)
 }
 
@@ -272,6 +282,8 @@ func unpackRecords(kinesisOutput *kinesis.OutputPlugin, data unsafe.Pointer, len
 		default:
 			timestamp = time.Now()
 		}
+
+		record = enricher.EnrichRecord(record, timestamp)
 
 		retCode := kinesisOutput.AddRecord(&records, record, &timestamp)
 		if retCode != output.FLB_OK {
