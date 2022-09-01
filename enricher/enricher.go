@@ -69,7 +69,7 @@ func (enr *enricher) enrichRecord(r map[interface{}]interface{}, t time.Time) ma
 		return r
 	}
 
-	resource := map[string]interface{}{
+	resource := map[interface{}]interface{}{
 		"cloud.account.id":      enr.canvaAWSAccount,
 		"service.name":          enr.canvaAppName,
 		"cloud.platform":        "aws_ecs",

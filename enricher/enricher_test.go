@@ -43,7 +43,7 @@ func Test_enricher_enrichRecord(t *testing.T) {
 				time.Date(2009, time.November, 10, 23, 7, 5, 432000000, time.UTC),
 			},
 			want: map[interface{}]interface{}{
-				"resource": map[string]interface{}{
+				"resource": map[interface{}]interface{}{
 					"cloud.account.id":      "canva_aws_account_val",
 					"service.name":          "canva_app_name_val",
 					"cloud.platform":        "aws_ecs",
