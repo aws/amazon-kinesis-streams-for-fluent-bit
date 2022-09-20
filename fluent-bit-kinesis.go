@@ -26,6 +26,7 @@ import (
 	"github.com/fluent/fluent-bit-go/output"
 	"github.com/sirupsen/logrus"
 
+	"github.com/canva/amazon-kinesis-streams-for-fluent-bit/compress"
 	"github.com/canva/amazon-kinesis-streams-for-fluent-bit/enricher"
 	"github.com/canva/amazon-kinesis-streams-for-fluent-bit/kinesis"
 )
@@ -98,6 +99,10 @@ func newKinesisOutput(ctx unsafe.Pointer, pluginID int) (*kinesis.OutputPlugin, 
 	logrus.Infof("[kinesis %d] plugin parameter aggregation_maximum_record_size = %q", pluginID, aggregationMaximumRecordSize)
 	skipAggregationRecordSize := output.FLBPluginConfigKey(ctx, "skip_aggregation_record_size")
 	logrus.Infof("[kinesis %d] plugin parameter skip_aggregation_record_size = %q", pluginID, skipAggregationRecordSize)
+	aggregationCompression := output.FLBPluginConfigKey(ctx, "aggregation_compression")
+	logrus.Infof("[kinesis %d] plugin parameter aggregation_compression = %q", pluginID, aggregationCompression)
+	aggregationCompressionLevel := output.FLBPluginConfigKey(ctx, "aggregation_compression_level")
+	logrus.Infof("[kinesis %d] plugin parameter aggregation_compression_level = %q", pluginID, aggregationCompressionLevel)
 
 	enrichRecords := output.FLBPluginConfigKey(ctx, "enrich_records")
 	logrus.Infof("[kinesis %d] plugin parameter enrich_records = %q", pluginID, enrichRecords)
@@ -177,6 +182,8 @@ func newKinesisOutput(ctx unsafe.Pointer, pluginID int) (*kinesis.OutputPlugin, 
 	var (
 		aggregationMaximumRecordSizeInt *int
 		skipAggregationRecordSizeInt    *int
+		aggregationCompressionFormat    compress.Format
+		aggregationCompressionLevelInt  int
 	)
 	if aggregationMaximumRecordSize != "" {
 		intVal, err := parseNonNegativeConfig("aggregation_maximum_record_size", aggregationMaximumRecordSize, pluginID)
@@ -192,12 +199,33 @@ func newKinesisOutput(ctx unsafe.Pointer, pluginID int) (*kinesis.OutputPlugin, 
 		}
 		skipAggregationRecordSizeInt = &intVal
 	}
+	switch aggregationCompression {
+	case "", string(compress.FormatNoop):
+		aggregationCompressionFormat = compress.FormatNoop
+	case string(compress.FormatGZip):
+		aggregationCompressionFormat = compress.FormatGZip
+	case string(compress.FormatZSTD):
+		aggregationCompressionFormat = compress.FormatZSTD
+	default:
+		return nil, fmt.Errorf("[kinesis %d] Invalid 'aggregation_compression' value %q specified, must be 'noop', 'gzip', 'zstd', or undefined", pluginID, aggregationCompression)
+	}
+	if aggregationCompressionLevel != "" {
+		aggregationCompressionLevelInt, err = parseNonNegativeConfig("aggregation_compression_level", aggregationCompressionLevel, pluginID)
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	enricherEnable := false
 	if strings.ToLower(enrichRecords) == "true" {
 		enricherEnable = true
 	}
+
 	enricher.Init(enricherEnable)
+	compress.Init(&compress.Config{
+		Format: aggregationCompressionFormat,
+		Level:  aggregationCompressionLevelInt,
+	})
 
 	return kinesis.NewOutputPlugin(region, stream, dataKeys, partitionKey, roleARN, kinesisEndpoint, stsEndpoint, timeKey, timeKeyFmt, logKey, replaceDots, concurrencyInt, concurrencyRetriesInt, isAggregate, appendNL, comp, pluginID, httpRequestTimeoutDuration, aggregationMaximumRecordSizeInt, skipAggregationRecordSizeInt)
 }
