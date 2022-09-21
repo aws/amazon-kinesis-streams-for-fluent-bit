@@ -158,27 +158,27 @@ func (a *Aggregator) AggregateRecords() (entry *kinesis.PutRecordsRequestEntry, 
 		return nil, err
 	}
 
-	compressedData, err := compress.Compress(protoBufData)
-	if err != nil {
-		logrus.Warnf("Failed to compress records: %v", err)
-		// This should not result in dropping records/increasing retries.
-		// Compressor will return original data if it fails to compress them.
-	}
-
 	md5Sum := md5.New()
-	md5Sum.Write(compressedData)
+	md5Sum.Write(protoBufData)
 	md5CheckSum := md5Sum.Sum(nil)
 
-	kclData := append(kclMagicNumber, compressedData...)
+	kclData := append(kclMagicNumber, protoBufData...)
 	kclData = append(kclData, md5CheckSum...)
 
 	logrus.Debugf("[kinesis ] Aggregated (%d) records of size (%d) with total size (%d), partition key (%s)\n", len(a.records), a.getSize(), len(kclData), pkeys[0])
+
+	compressedData, err := compress.Compress(kclData)
+	if err != nil {
+		logrus.Warnf("Failed to compress KCL data: %v", err)
+		// This should not result in dropping records/increasing retries.
+		// Compressor will return original data if it fails to compress them.
+	}
 
 	// Clear buffer if aggregation didn't fail
 	a.clearBuffer()
 
 	return &kinesis.PutRecordsRequestEntry{
-		Data:         kclData,
+		Data:         compressedData,
 		PartitionKey: aws.String(pkeys[0]),
 	}, nil
 }
