@@ -18,10 +18,6 @@ func TestNew(t *testing.T) {
 		t.Errorf("New() = nil")
 	}
 
-	if z.level != 1 {
-		t.Errorf("New().level = %v, want %v", z.level, 1)
-	}
-
 	if z.writer == nil {
 		t.Errorf("New().writer = nil")
 	}
@@ -45,6 +41,11 @@ func TestZSTD_Compress(t *testing.T) {
 			"not_locked",
 			&ZSTD{
 				writer: writer,
+				writerOpts: []zstd.EOption{
+					zstd.WithEncoderConcurrency(1),
+					zstd.WithEncoderLevel(1),
+					zstd.WithZeroFrames(true),
+				},
 			},
 			args{[]byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}},
 			false,
@@ -55,7 +56,11 @@ func TestZSTD_Compress(t *testing.T) {
 			"locked",
 			&ZSTD{
 				writer: writer,
-				level:  1,
+				writerOpts: []zstd.EOption{
+					zstd.WithEncoderConcurrency(1),
+					zstd.WithEncoderLevel(1),
+					zstd.WithZeroFrames(true),
+				},
 			},
 			args{[]byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}},
 			true,

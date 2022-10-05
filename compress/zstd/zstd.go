@@ -10,20 +10,24 @@ import (
 
 // ZSTD implements Compression interface using gzip format.
 type ZSTD struct {
-	mutex  sync.Mutex
-	buffer bytes.Buffer
-	writer *zstd.Encoder
-	level  zstd.EncoderLevel
+	mutex      sync.Mutex
+	buffer     bytes.Buffer
+	writer     *zstd.Encoder
+	writerOpts []zstd.EOption
 }
 
 // New creates a new ZSTD instance.
 func New(level int) (*ZSTD, error) {
 	z := ZSTD{
-		level: zstd.EncoderLevel(level),
+		writerOpts: []zstd.EOption{
+			zstd.WithEncoderConcurrency(1),
+			zstd.WithEncoderLevel(zstd.EncoderLevel(level)),
+			zstd.WithZeroFrames(true),
+		},
 	}
 
 	var err error
-	z.writer, err = zstd.NewWriter(&z.buffer, zstd.WithEncoderConcurrency(1), zstd.WithEncoderLevel(z.level))
+	z.writer, err = zstd.NewWriter(&z.buffer, z.writerOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -47,7 +51,7 @@ func (z *ZSTD) Compress(data []byte) ([]byte, error) {
 		// This should not happen since we only run a single thread.
 		// Good to have this logic here if we want to support concurrent processing.
 		tmpBuffer = new(bytes.Buffer)
-		tmpWriter, err = zstd.NewWriter(tmpBuffer, zstd.WithEncoderConcurrency(1), zstd.WithEncoderLevel(z.level))
+		tmpWriter, err = zstd.NewWriter(tmpBuffer, z.writerOpts...)
 		if err != nil {
 			return data, err
 		}
