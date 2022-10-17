@@ -61,5 +61,8 @@ func (z *GZip) Compress(data []byte) ([]byte, error) {
 		return data, err
 	}
 
-	return tmpBuffer.Bytes(), nil
+	bufferBytes := tmpBuffer.Bytes()
+	result := make([]byte, len(bufferBytes))
+	copy(result, bufferBytes)
+	return result, nil
 }

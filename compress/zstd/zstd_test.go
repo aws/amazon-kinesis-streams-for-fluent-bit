@@ -84,3 +84,37 @@ func TestZSTD_Compress(t *testing.T) {
 		})
 	}
 }
+
+func TestBufferReuse(t *testing.T) {
+	compress1Want := []byte{40, 181, 47, 253, 4, 0, 25, 0, 0, 1, 2, 3, 165, 229, 78, 12}
+	compress2Want := []byte{40, 181, 47, 253, 4, 0, 41, 0, 0, 4, 5, 6, 7, 8, 41, 208, 126, 18}
+	compress3Want := []byte{40, 181, 47, 253, 4, 0, 17, 0, 0, 9, 10, 235, 159, 206, 197}
+
+	z, err := New(1)
+	if err != nil {
+		t.Errorf("New() error = %v", err)
+	}
+
+	compressed1, err := z.Compress([]byte{1, 2, 3})
+	if err != nil {
+		t.Errorf("New() error = %v", err)
+	}
+	compressed2, err := z.Compress([]byte{4, 5, 6, 7, 8})
+	if err != nil {
+		t.Errorf("New() error = %v", err)
+	}
+	compressed3, err := z.Compress([]byte{9, 10})
+	if err != nil {
+		t.Errorf("New() error = %v", err)
+	}
+
+	if !bytes.Equal(compressed1, compress1Want) {
+		t.Errorf("compressed1 got %v, want %v ", compressed1, compress1Want)
+	}
+	if !bytes.Equal(compressed2, compress2Want) {
+		t.Errorf("compressed2 got %v, want %v ", compressed2, compress2Want)
+	}
+	if !bytes.Equal(compressed3, compress3Want) {
+		t.Errorf("compressed3 got %v, want %v ", compressed3, compress3Want)
+	}
+}

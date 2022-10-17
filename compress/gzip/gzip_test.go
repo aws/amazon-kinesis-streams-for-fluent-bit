@@ -77,3 +77,37 @@ func TestGZip_Compress(t *testing.T) {
 		})
 	}
 }
+
+func TestBufferReuse(t *testing.T) {
+	compress1Want := []byte{31, 139, 8, 0, 0, 0, 0, 0, 4, 255, 0, 3, 0, 252, 255, 1, 2, 3, 1, 0, 0, 255, 255, 29, 128, 188, 85, 3, 0, 0, 0}
+	compress2Want := []byte{31, 139, 8, 0, 0, 0, 0, 0, 4, 255, 0, 5, 0, 250, 255, 4, 5, 6, 7, 8, 1, 0, 0, 255, 255, 168, 195, 107, 65, 5, 0, 0, 0}
+	compress3Want := []byte{31, 139, 8, 0, 0, 0, 0, 0, 4, 255, 0, 2, 0, 253, 255, 9, 10, 1, 0, 0, 255, 255, 168, 64, 206, 112, 2, 0, 0, 0}
+
+	z, err := New(1)
+	if err != nil {
+		t.Errorf("New() error = %v", err)
+	}
+
+	compressed1, err := z.Compress([]byte{1, 2, 3})
+	if err != nil {
+		t.Errorf("New() error = %v", err)
+	}
+	compressed2, err := z.Compress([]byte{4, 5, 6, 7, 8})
+	if err != nil {
+		t.Errorf("New() error = %v", err)
+	}
+	compressed3, err := z.Compress([]byte{9, 10})
+	if err != nil {
+		t.Errorf("New() error = %v", err)
+	}
+
+	if !bytes.Equal(compressed1, compress1Want) {
+		t.Errorf("compressed1 got %v, want %v ", compressed1, compress1Want)
+	}
+	if !bytes.Equal(compressed2, compress2Want) {
+		t.Errorf("compressed2 got %v, want %v ", compressed2, compress2Want)
+	}
+	if !bytes.Equal(compressed3, compress3Want) {
+		t.Errorf("compressed3 got %v, want %v ", compressed3, compress3Want)
+	}
+}
