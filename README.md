@@ -1,6 +1,8 @@
 [![Test Actions Status](https://github.com/aws/amazon-kinesis-streams-for-fluent-bit/workflows/Build/badge.svg)](https://github.com/aws/amazon-kinesis-streams-for-fluent-bit/actions)
 ## Fluent Bit Plugin for Amazon Kinesis Data Streams
 
+**NOTE: A new higher performance Fluent Bit Kinesis Plugin has been released.** Check out our [official guidance](#new-higher-performance-core-fluent-bit-plugin).
+
 A Fluent Bit output plugin for Amazon Kinesis Data Streams.
 
 #### Security disclosures
@@ -214,3 +216,29 @@ Example config:
     compression     zlib
     append_newline  true
 ```
+
+### New Higher Performance Core Fluent Bit Plugin
+
+We have released a [new higher performance Kinesis Streams plugin](https://docs.fluentbit.io/manual/pipeline/outputs/kinesis) named `kinesis_streams`.
+
+That plugin has many of the features of this older, lower performance and less efficient plugin. Please compare this document with its [documentation](https://docs.fluentbit.io/manual/pipeline/outputs/kinesis) for an up to date feature set comparison between the two plugins.
+
+#### Do you plan to deprecate this older plugin?
+
+This plugin will continue to be supported. However, we are pausing development on it and will focus on the high performance version instead.
+
+#### Which plugin should I use?
+
+If the features of the higher performance plugin are sufficient for your use cases, please use it. It can achieve higher throughput and will consume less CPU and memory.
+
+As time goes on we expect new features to be added to the C plugin only, however, this is determined on a case by case basis. There is some feature gap between the two plugins. Please consult the [C plugin documentation](https://docs.fluentbit.io/manual/pipeline/outputs/firehose) and this document for the features offered by each plugin. 
+
+#### How can I migrate to the higher performance plugin?
+
+For many users, you can simply replace the plugin name `kinesis` with the new name `kinesis_streams`.
+
+#### Do you accept contributions to both plugins?
+
+Yes. The high performance plugin is written in C, and this plugin is written in Golang. We understand that Go is an easier language for amateur contributors to write code in- that is one of the primary reasons we are continuing to maintain this repo.
+
+However, if you can write code in C, please consider contributing new features to the [higher performance plugin](https://github.com/fluent/fluent-bit/tree/master/plugins/out_kinesis_firehose).
