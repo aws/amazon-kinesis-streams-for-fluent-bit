@@ -15,11 +15,14 @@ package main
 
 import (
 	"C"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
 	"time"
 	"unsafe"
+
+	"github.com/canva/amazon-kinesis-streams-for-fluent-bit/enricher/eks"
 
 	"github.com/aws/amazon-kinesis-firehose-for-fluent-bit/plugins"
 	kinesisAPI "github.com/aws/aws-sdk-go/service/kinesis"
@@ -40,6 +43,7 @@ const (
 
 var (
 	pluginInstances []*kinesis.OutputPlugin
+	enr             *enricher.Enricher
 )
 
 func addPluginInstance(ctx unsafe.Pointer) error {
@@ -106,6 +110,9 @@ func newKinesisOutput(ctx unsafe.Pointer, pluginID int) (*kinesis.OutputPlugin, 
 
 	enrichRecords := output.FLBPluginConfigKey(ctx, "enrich_records")
 	logrus.Infof("[kinesis %d] plugin parameter enrich_records = %q", pluginID, enrichRecords)
+
+	enrichEKSRecords := output.FLBPluginConfigKey(ctx, "enrich_eks_records")
+	logrus.Infof("[kinesis %d] plugin parameter enrich_eks_records = %q", pluginID, enrichEKSRecords)
 
 	if stream == "" || region == "" {
 		return nil, fmt.Errorf("[kinesis %d] stream and region are required configuration parameters", pluginID)
@@ -216,12 +223,32 @@ func newKinesisOutput(ctx unsafe.Pointer, pluginID int) (*kinesis.OutputPlugin, 
 		}
 	}
 
-	enricherEnable := false
+	var e enricher.IEnricher
+
+	var enricherEnable bool
+	// ECS Enricher
 	if strings.ToLower(enrichRecords) == "true" {
 		enricherEnable = true
 	}
 
-	enricher.Init(enricherEnable)
+	var enricherEksEnable bool
+	// EKS Enricher
+	if strings.ToLower(enrichEKSRecords) == "true" {
+		enricherEksEnable = true
+		e, err = eks.NewEnricher()
+
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if enricherEnable && enricherEksEnable {
+		enr = nil
+		return nil, errors.New("both enrichers cannot be enabled at the same time")
+	}
+
+	enr = enricher.NewEnricher(enricherEnable || enricherEksEnable, e)
+
 	compress.Init(&compress.Config{
 		Format: aggregationCompressionFormat,
 		Level:  aggregationCompressionLevelInt,
@@ -311,7 +338,7 @@ func unpackRecords(kinesisOutput *kinesis.OutputPlugin, data unsafe.Pointer, len
 			timestamp = time.Now()
 		}
 
-		record = enricher.EnrichRecord(record, timestamp)
+		record = enr.EnrichRecord(record, timestamp)
 
 		retCode := kinesisOutput.AddRecord(&records, record, &timestamp)
 		if retCode != output.FLB_OK {

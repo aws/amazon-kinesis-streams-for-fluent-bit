@@ -1,111 +1,62 @@
-package enricher
+package enricher_test
 
 import (
-	"reflect"
 	"testing"
 	"time"
+
+	"github.com/canva/amazon-kinesis-streams-for-fluent-bit/enricher"
+	"github.com/stretchr/testify/assert"
 )
 
-func Test_enricher_enrichRecord(t *testing.T) {
-	type args struct {
-		r map[interface{}]interface{}
-		t time.Time
-	}
-	tests := []struct {
-		name string
-		enr  *enricher
-		args args
-		want map[interface{}]interface{}
+func TestEnrichRecord(t *testing.T) {
+	var cases = []struct {
+		Name     string
+		Enabled  bool
+		Enricher enricher.IEnricher
+		Input    map[interface{}]interface{}
+		Expected map[interface{}]interface{}
 	}{
 		{
-			name: "enable",
-			enr: &enricher{
-				enable:          true,
-				canvaAWSAccount: "canva_aws_account_val",
-				canvaAppName:    "canva_app_name_val",
-				logGroup:        "log_group_val",
-				ecsTaskFamily:   "ecs_task_family_val",
-				ecsTaskRevision: 10001,
+			Name:     "Disabled",
+			Enabled:  false,
+			Enricher: &DummyEnricher{},
+			Input: map[interface{}]interface{}{
+				"message": "hello world",
 			},
-			args: args{
-				map[interface{}]interface{}{
-					"ec2_instance_id":     "ec2_instance_id_val",
-					"ecs_cluster":         "ecs_cluster_val",
-					"ecs_task_arn":        "ecs_task_arn_val",
-					"container_id":        "container_id_val",
-					"container_name":      "container_name_val",
-					"other_key_1":         "other_value_1",
-					"other_key_2":         "other_value_2",
-					"other_key_3":         "other_value_3",
-					"timestamp":           "1234567890",
-					"ecs_task_definition": "ecs_task_definition_val",
-				},
-				time.Date(2009, time.November, 10, 23, 7, 5, 432000000, time.UTC),
-			},
-			want: map[interface{}]interface{}{
-				"resource": map[interface{}]interface{}{
-					"cloud.account.id":      "canva_aws_account_val",
-					"service.name":          "canva_app_name_val",
-					"cloud.platform":        "aws_ecs",
-					"aws.ecs.launchtype":    "EC2",
-					"aws.ecs.task.family":   "ecs_task_family_val",
-					"aws.ecs.task.revision": 10001,
-					"aws.log.group.names":   "log_group_val",
-					"host.id":               "ec2_instance_id_val",
-					"aws.ecs.cluster.name":  "ecs_cluster_val",
-					"aws.ecs.task.arn":      "ecs_task_arn_val",
-					"container.id":          "container_id_val",
-					"container.name":        "container_name_val",
-				},
-				"body": map[interface{}]interface{}{
-					"other_key_1": "other_value_1",
-					"other_key_2": "other_value_2",
-					"other_key_3": "other_value_3",
-				},
-				"timestamp":         "1234567890",
-				"observedTimestamp": int64(1257894425432),
+			Expected: map[interface{}]interface{}{
+				"message": "hello world",
 			},
 		},
 		{
-			name: "disable",
-			enr: &enricher{
-				enable: false,
+			Name:     "Enabled",
+			Enabled:  true,
+			Enricher: &DummyEnricher{},
+			Input: map[interface{}]interface{}{
+				"message": "hello world",
 			},
-			args: args{
-				map[interface{}]interface{}{
-					"ec2_instance_id":     "ec2_instance_id_val",
-					"ecs_cluster":         "ecs_cluster_val",
-					"ecs_task_arn":        "ecs_task_arn_val",
-					"container_id":        "container_id_val",
-					"container_name":      "container_name_val",
-					"other_key_1":         "other_value_1",
-					"other_key_2":         "other_value_2",
-					"other_key_3":         "other_value_3",
-					"timestamp":           "1234567890",
-					"ecs_task_definition": "ecs_task_definition_val",
-				},
-				time.Date(2009, time.November, 10, 23, 7, 5, 432000000, time.UTC),
-			},
-			want: map[interface{}]interface{}{
-				"ec2_instance_id":     "ec2_instance_id_val",
-				"ecs_cluster":         "ecs_cluster_val",
-				"ecs_task_arn":        "ecs_task_arn_val",
-				"container_id":        "container_id_val",
-				"container_name":      "container_name_val",
-				"other_key_1":         "other_value_1",
-				"other_key_2":         "other_value_2",
-				"other_key_3":         "other_value_3",
-				"timestamp":           "1234567890",
-				"ecs_task_definition": "ecs_task_definition_val",
-			},
+			Expected: DummyRecord,
 		},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := tt.enr.enrichRecord(tt.args.r, tt.args.t)
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("enricher.enrichRecord() = %+v, want %+v", got, tt.want)
-			}
+
+	for _, v := range cases {
+		t.Run(v.Name, func(t *testing.T) {
+			en := enricher.NewEnricher(v.Enabled, v.Enricher)
+
+			actual := en.EnrichRecord(v.Input, DummyTime)
+
+			assert.Equal(t, v.Expected, actual)
 		})
 	}
 }
+
+type DummyEnricher struct{}
+
+func (d DummyEnricher) EnrichRecord(_ map[interface{}]interface{}, _ time.Time) map[interface{}]interface{} {
+	return DummyRecord
+}
+
+var DummyRecord = map[interface{}]interface{}{
+	"message": "I am enriched",
+}
+
+var DummyTime = time.Now()

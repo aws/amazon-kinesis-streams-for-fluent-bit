@@ -5,6 +5,7 @@ go 1.19
 require (
 	github.com/aws/amazon-kinesis-firehose-for-fluent-bit v1.7.0
 	github.com/aws/aws-sdk-go v1.44.91
+	github.com/caarlos0/env/v7 v7.0.0
 	github.com/fluent/fluent-bit-go v0.0.0-20220311094233-780004bf5562
 	github.com/golang/mock v1.6.0
 	github.com/golang/protobuf v1.5.2
