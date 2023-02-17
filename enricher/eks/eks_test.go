@@ -18,11 +18,11 @@ func TestValidNewEnricher(t *testing.T) {
 			Name: "Gets AccountId",
 			Env: map[string]string{
 				mappings.ENV_ACCOUNT_ID:    "1234567890",
-				mappings.ENV_ACCOUNT_GROUP: DummyAccountGroup,
+				mappings.ENV_ACCOUNT_GROUP: DummyAccountFunction,
 			},
 			Expected: &Enricher{
 				AccountId:            "1234567890",
-				CanvaAccountFunction: DummyAccountGroup,
+				CanvaAccountFunction: DummyAccountFunction,
 			},
 		},
 		{
@@ -61,7 +61,7 @@ func TestInvalidNewEnricher(t *testing.T) {
 	assert.Error(t, err)
 }
 
-func TestEnrichRecordsWithAccountId(t *testing.T) {
+func TestEnrichRecords(t *testing.T) {
 	var cases = []struct {
 		Name     string
 		Enricher Enricher
@@ -72,21 +72,22 @@ func TestEnrichRecordsWithAccountId(t *testing.T) {
 			Name: "Adds Account Id",
 			Enricher: Enricher{
 				AccountId:            "1234567",
-				CanvaAccountFunction: DummyAccountGroup,
+				CanvaAccountFunction: DummyAccountFunction,
 			},
 			Input: map[interface{}]interface{}{
 				"log": "hello world",
 			},
 			Expected: map[interface{}]interface{}{
-				"log": "hello world",
+				mappings.OBSERVED_TIMESTAMP: ExpectedTime,
+				"log":                       "hello world",
 				"resource": map[interface{}]interface{}{
 					mappings.RESOURCE_CLOUD_ACCOUNT_ID: "1234567",
-					mappings.RESOURCE_ACCOUNT_GROUP:    DummyAccountGroup,
+					mappings.RESOURCE_ACCOUNT_GROUP:    DummyAccountFunction,
 				},
 			},
 		},
 		{
-			Name: "Adds Account Group",
+			Name: "Adds Account Group Function",
 			Enricher: Enricher{
 				AccountId:            DummyAccountId,
 				CanvaAccountFunction: "PII",
@@ -95,7 +96,8 @@ func TestEnrichRecordsWithAccountId(t *testing.T) {
 				"log": "hello world",
 			},
 			Expected: map[interface{}]interface{}{
-				"log": "hello world",
+				mappings.OBSERVED_TIMESTAMP: ExpectedTime,
+				"log":                       "hello world",
 				"resource": map[interface{}]interface{}{
 					mappings.RESOURCE_CLOUD_ACCOUNT_ID: DummyAccountId,
 					mappings.RESOURCE_ACCOUNT_GROUP:    "PII",
@@ -113,7 +115,11 @@ func TestEnrichRecordsWithAccountId(t *testing.T) {
 }
 
 var (
-	DummyTime         = time.Now()
-	DummyAccountGroup = "general"
-	DummyAccountId    = "Account_Id"
+	DummyAccountFunction = "general"
+	DummyAccountId       = "Account_Id"
+	DummyTime            = time.Date(2009, time.November, 10, 23, 7, 5, 432000000, time.UTC)
+)
+
+var (
+	ExpectedTime = int64(1257894425432)
 )

@@ -94,9 +94,9 @@ func (enr *Enricher) EnrichRecord(r map[interface{}]interface{}, t time.Time) ma
 		}
 	}
 	return map[interface{}]interface{}{
-		"resource":          resource,
-		"body":              body,
-		"timestamp":         timestamp,
-		"observedTimestamp": t.UnixMilli(),
+		"resource":                  resource,
+		"body":                      body,
+		"timestamp":                 timestamp,
+		mappings.OBSERVED_TIMESTAMP: t.UnixMilli(),
 	}
 }

@@ -26,12 +26,14 @@ func NewEnricher() (*Enricher, error) {
 
 var _ enricher.IEnricher = (*Enricher)(nil)
 
-func (e Enricher) EnrichRecord(r map[interface{}]interface{}, _ time.Time) map[interface{}]interface{} {
+func (e Enricher) EnrichRecord(r map[interface{}]interface{}, t time.Time) map[interface{}]interface{} {
 	// add resource attributes
 	r["resource"] = map[interface{}]interface{}{
 		mappings.RESOURCE_CLOUD_ACCOUNT_ID: e.AccountId,
 		mappings.RESOURCE_ACCOUNT_GROUP:    e.CanvaAccountFunction,
 	}
+
+	r[mappings.OBSERVED_TIMESTAMP] = t.UnixMilli()
 
 	return r
 }

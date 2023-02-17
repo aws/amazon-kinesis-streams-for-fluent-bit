@@ -1,6 +1,10 @@
 package mappings
 
 const (
+	OBSERVED_TIMESTAMP = "observedTimestamp"
+)
+
+const (
 	RESOURCE_CLOUD_ACCOUNT_ID = "cloud.account.id"
 	RESOURCE_ACCOUNT_GROUP    = "canva.account.function"
 )

@@ -64,8 +64,8 @@ func TestEnrichRecords(t *testing.T) {
 					"other_key_2": "other_value_2",
 					"other_key_3": "other_value_3",
 				},
-				"timestamp":         "1234567890",
-				"observedTimestamp": int64(1257894425432),
+				"timestamp":                 "1234567890",
+				mappings.OBSERVED_TIMESTAMP: int64(1257894425432),
 			},
 		},
 	}
