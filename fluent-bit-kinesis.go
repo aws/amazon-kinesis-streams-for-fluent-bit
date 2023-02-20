@@ -33,6 +33,7 @@ import (
 	"github.com/canva/amazon-kinesis-streams-for-fluent-bit/enricher"
 	"github.com/canva/amazon-kinesis-streams-for-fluent-bit/kinesis"
 )
+import "github.com/canva/amazon-kinesis-streams-for-fluent-bit/enricher/ecs"
 
 const (
 	// Kinesis API Limit https://docs.aws.amazon.com/sdk-for-go/api/service/kinesis/#Kinesis.PutRecords
@@ -229,6 +230,7 @@ func newKinesisOutput(ctx unsafe.Pointer, pluginID int) (*kinesis.OutputPlugin, 
 	// ECS Enricher
 	if strings.ToLower(enrichRecords) == "true" {
 		enricherEnable = true
+		e = ecs.NewEnricher()
 	}
 
 	var enricherEksEnable bool
