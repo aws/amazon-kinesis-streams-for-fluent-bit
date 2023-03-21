@@ -27,6 +27,11 @@ func NewEnricher() (*Enricher, error) {
 var _ enricher.IEnricher = (*Enricher)(nil)
 
 func (e Enricher) EnrichRecord(r map[interface{}]interface{}, t time.Time) map[interface{}]interface{} {
+	// Drop log if "log" field is empty
+	if r["log"] == nil {
+		return nil
+	}
+
 	// add resource attributes
 	r["resource"] = map[interface{}]interface{}{
 		mappings.RESOURCE_CLOUD_ACCOUNT_ID: e.AccountId,

@@ -104,6 +104,17 @@ func TestEnrichRecords(t *testing.T) {
 				},
 			},
 		},
+		{
+			Name: "Drop Log If Log Field Is Empty",
+			Enricher: Enricher{
+				AccountId:            DummyAccountId,
+				CanvaAccountFunction: DummyAccountFunction,
+			},
+			Input: map[interface{}]interface{}{
+				"observedTimestamp": DummyTime,
+			},
+			Expected: nil,
+		},
 	}
 
 	for _, c := range cases {
