@@ -4,7 +4,7 @@ go 1.17
 
 require (
 	github.com/aws/amazon-kinesis-firehose-for-fluent-bit v1.7.1
-	github.com/aws/aws-sdk-go v1.44.204
+	github.com/aws/aws-sdk-go v1.44.229
 	github.com/fluent/fluent-bit-go v0.0.0-20201210173045-3fd1e0486df2
 	github.com/golang/mock v1.6.0
 	github.com/golang/protobuf v1.5.2
@@ -23,7 +23,7 @@ require (
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/ugorji/go/codec v1.1.7 // indirect
-	golang.org/x/net v0.7.0
+	golang.org/x/net v0.7.0 // indirect
 	golang.org/x/sys v0.5.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
