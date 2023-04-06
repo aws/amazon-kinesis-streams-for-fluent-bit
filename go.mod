@@ -1,6 +1,6 @@
 module github.com/aws/amazon-kinesis-streams-for-fluent-bit
 
-go 1.17
+go 1.20
 
 require (
 	github.com/aws/amazon-kinesis-firehose-for-fluent-bit v1.7.1
