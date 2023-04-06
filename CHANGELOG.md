@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.10.2
+* Enhancement - Upgrade Go version to 1.20
+
 ## 1.10.1
 * Enhancement - Added different base user agent for Linux and Windows
 
