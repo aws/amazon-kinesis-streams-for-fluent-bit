@@ -35,5 +35,13 @@ func (e Enricher) EnrichRecord(r map[interface{}]interface{}, t time.Time) map[i
 
 	r[mappings.OBSERVED_TIMESTAMP] = t.UnixMilli()
 
+	// If Fluentbit has failed to enrich k8s metadata on the log, we insert a placeholder value for the kubernetes.service_name
+	// https://docs.google.com/document/d/1vRCUKMeo6ypnAq34iwQN7LtDsXxmlj0aYEfRofwV7A4/edit
+	if _, ok := r["kubernetes"]; !ok {
+		r["kubernetes"] = map[interface{}]interface{}{
+			mappings.KUBERNETES_CONTAINER_NAME: mappings.PLACEHOLDER_MISSING_KUBERNETES_METADATA,
+		}
+	}
+
 	return r
 }

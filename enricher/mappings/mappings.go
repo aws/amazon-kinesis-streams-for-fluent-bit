@@ -5,6 +5,11 @@ const (
 )
 
 const (
+	KUBERNETES_CONTAINER_NAME               = "container_name"
+	PLACEHOLDER_MISSING_KUBERNETES_METADATA = "_missing_metadata"
+)
+
+const (
 	RESOURCE_CLOUD_ACCOUNT_ID = "cloud.account.id"
 	RESOURCE_ACCOUNT_GROUP    = "canva.account.function"
 )
