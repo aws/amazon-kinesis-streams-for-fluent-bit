@@ -76,6 +76,9 @@ func TestEnrichRecords(t *testing.T) {
 			},
 			Input: map[interface{}]interface{}{
 				"log": "hello world",
+				mappings.KUBERNETES_RESOURCE_FIELD_NAME: map[interface{}]interface{}{
+					"key": "value",
+				},
 			},
 			Expected: map[interface{}]interface{}{
 				mappings.OBSERVED_TIMESTAMP: ExpectedTime,
@@ -83,6 +86,9 @@ func TestEnrichRecords(t *testing.T) {
 				"resource": map[interface{}]interface{}{
 					mappings.RESOURCE_CLOUD_ACCOUNT_ID: "1234567",
 					mappings.RESOURCE_ACCOUNT_GROUP:    DummyAccountFunction,
+				},
+				mappings.KUBERNETES_RESOURCE_FIELD_NAME: map[interface{}]interface{}{
+					"key": "value",
 				},
 			},
 		},
@@ -94,6 +100,9 @@ func TestEnrichRecords(t *testing.T) {
 			},
 			Input: map[interface{}]interface{}{
 				"log": "hello world",
+				mappings.KUBERNETES_RESOURCE_FIELD_NAME: map[interface{}]interface{}{
+					"key": "value",
+				},
 			},
 			Expected: map[interface{}]interface{}{
 				mappings.OBSERVED_TIMESTAMP: ExpectedTime,
@@ -101,6 +110,9 @@ func TestEnrichRecords(t *testing.T) {
 				"resource": map[interface{}]interface{}{
 					mappings.RESOURCE_CLOUD_ACCOUNT_ID: DummyAccountId,
 					mappings.RESOURCE_ACCOUNT_GROUP:    "PII",
+				},
+				mappings.KUBERNETES_RESOURCE_FIELD_NAME: map[interface{}]interface{}{
+					"key": "value",
 				},
 			},
 		},
@@ -112,8 +124,32 @@ func TestEnrichRecords(t *testing.T) {
 			},
 			Input: map[interface{}]interface{}{
 				"observedTimestamp": DummyTime,
+				mappings.KUBERNETES_RESOURCE_FIELD_NAME: map[interface{}]interface{}{
+					"key": "value",
+				},
 			},
 			Expected: nil,
+		},
+		{
+			Name: "Enrich placeholder service name if kubernetes dict is empty",
+			Enricher: Enricher{
+				AccountId:            DummyAccountId,
+				CanvaAccountFunction: DummyAccountFunction,
+			},
+			Input: map[interface{}]interface{}{
+				"log": "hello world",
+			},
+			Expected: map[interface{}]interface{}{
+				mappings.OBSERVED_TIMESTAMP: ExpectedTime,
+				"log":                       "hello world",
+				"resource": map[interface{}]interface{}{
+					mappings.RESOURCE_CLOUD_ACCOUNT_ID: DummyAccountId,
+					mappings.RESOURCE_ACCOUNT_GROUP:    DummyAccountFunction,
+				},
+				mappings.KUBERNETES_RESOURCE_FIELD_NAME: map[interface{}]interface{}{
+					mappings.KUBERNETES_CONTAINER_NAME: mappings.PLACEHOLDER_MISSING_KUBERNETES_METADATA,
+				},
+			},
 		},
 	}
 
