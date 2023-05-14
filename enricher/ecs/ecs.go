@@ -55,13 +55,13 @@ func NewEnricher() *Enricher {
 // EnrichRecord modifies existing record.
 func (enr *Enricher) EnrichRecord(r map[interface{}]interface{}, t time.Time) map[interface{}]interface{} {
 	resource := map[interface{}]interface{}{
-		mappings.RESOURCE_CLOUD_ACCOUNT_ID: enr.canvaAWSAccount,
-		"service.name":                     enr.canvaAppName,
-		"cloud.platform":                   "aws_ecs",
-		"aws.ecs.launchtype":               "EC2",
-		"aws.ecs.task.family":              enr.ecsTaskFamily,
-		"aws.ecs.task.revision":            enr.ecsTaskRevision,
-		"aws.log.group.names":              enr.logGroup,
+		mappings.RESOURCE_ACCOUNT_ID: enr.canvaAWSAccount,
+		"service.name":               enr.canvaAppName,
+		"cloud.platform":             "aws_ecs",
+		"aws.ecs.launchtype":         "EC2",
+		"aws.ecs.task.family":        enr.ecsTaskFamily,
+		"aws.ecs.task.revision":      enr.ecsTaskRevision,
+		"aws.log.group.names":        enr.logGroup,
 	}
 	body := make(map[interface{}]interface{})
 
@@ -94,9 +94,9 @@ func (enr *Enricher) EnrichRecord(r map[interface{}]interface{}, t time.Time) ma
 		}
 	}
 	return map[interface{}]interface{}{
-		"resource":                  resource,
-		"body":                      body,
-		"timestamp":                 timestamp,
-		mappings.OBSERVED_TIMESTAMP: t.UnixMilli(),
+		mappings.RESOURCE_FIELD_NAME: resource,
+		"body":                       body,
+		"timestamp":                  timestamp,
+		mappings.OBSERVED_TIMESTAMP:  t.UnixMilli(),
 	}
 }

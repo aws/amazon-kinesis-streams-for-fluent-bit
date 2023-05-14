@@ -8,165 +8,158 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestValidNewEnricher(t *testing.T) {
-	var cases = []struct {
-		Name     string
-		Env      map[string]string
-		Expected *Enricher
-	}{
-		{
-			Name: "Gets AccountId",
-			Env: map[string]string{
-				mappings.ENV_ACCOUNT_ID:    "1234567890",
-				mappings.ENV_ACCOUNT_GROUP: DummyAccountFunction,
-			},
-			Expected: &Enricher{
-				AccountId:            "1234567890",
-				CanvaAccountFunction: DummyAccountFunction,
-			},
-		},
-		{
-			Name: "Gets Account Group",
-			Env: map[string]string{
-				mappings.ENV_ACCOUNT_ID:    DummyAccountId,
-				mappings.ENV_ACCOUNT_GROUP: "PII",
-			},
-			Expected: &Enricher{
-				AccountId:            DummyAccountId,
-				CanvaAccountFunction: "PII",
-			},
+func Test_NewEnricher(t *testing.T) {
+	t.Run("Valid", func(t *testing.T) {
+		envs := map[string]string{
+			mappings.ENV_ACCOUNT_ID:             DummyAccountId,
+			mappings.ENV_ACCOUNT_NAME:           DummyAccountName,
+			mappings.ENV_REGION:                 DummyRegion,
+			mappings.ENV_ACCOUNT_GROUP_FUNCTION: DummyAccountGroupFunction,
+			mappings.ENV_CLUSTER_NAME:           DummyClusterName,
+			mappings.ENV_PARTITION:              DummyPartition,
+			mappings.ENV_ORGANISATION:           DummyOrganization,
+			mappings.ENV_PLATFORM:               DummyPlatform,
+			mappings.ENV_PROVIDER:               DummyProvider,
+		}
+
+		for env, val := range envs {
+			t.Setenv(env, val)
+		}
+
+		enricher, err := NewEnricher()
+		assert.NoError(t, err)
+		assert.NotNil(t, enricher)
+
+		t.Cleanup(func() {})
+	})
+	t.Run("Invalid", func(t *testing.T) {
+		enricher, err := NewEnricher()
+
+		assert.Nil(t, enricher)
+		assert.Error(t, err)
+	})
+}
+
+func Test_EnrichRecord(t *testing.T) {
+	dummyLog := "hello world"
+	defaultInput := map[interface{}]interface{}{
+		mappings.LOG_FIELD_NAME: dummyLog,
+		mappings.KUBERNETES_RESOURCE_FIELD_NAME: map[interface{}]interface{}{
+			// default value, check if this isn't removed
+			"key": "value",
 		},
 	}
 
-	for _, v := range cases {
-		t.Run(v.Name, func(tt *testing.T) {
-			for k, v := range v.Env {
-				tt.Setenv(k, v)
-			}
-			actual, err := NewEnricher()
-
-			assert.NoError(tt, err)
-
-			assert.Equal(tt, v.Expected, actual)
-
-			tt.Cleanup(func() {})
-		})
+	defaultEnricher := Enricher{
+		CloudAccountId:            DummyAccountId,
+		CloudAccountName:          DummyAccountName,
+		CloudRegion:               DummyRegion,
+		CloudPartition:            DummyPartition,
+		CloudAccountGroupFunction: DummyAccountGroupFunction,
+		K8sClusterName:            DummyClusterName,
+		CloudProvider:             DummyProvider,
+		CloudPlatform:             DummyProvider,
+		Organization:              DummyOrganization,
 	}
-}
 
-func TestInvalidNewEnricher(t *testing.T) {
-	enricher, err := NewEnricher()
+	defaultExpected := map[interface{}]interface{}{
+		mappings.LOG_FIELD_NAME: dummyLog,
+		mappings.RESOURCE_FIELD_NAME: map[interface{}]interface{}{
+			mappings.RESOURCE_ACCOUNT_ID:             defaultEnricher.CloudAccountId,
+			mappings.RESOURCE_ACCOUNT_NAME:           defaultEnricher.CloudAccountName,
+			mappings.RESOURCE_REGION:                 defaultEnricher.CloudRegion,
+			mappings.RESOURCE_PARTITION:              defaultEnricher.CloudPartition,
+			mappings.RESOURCE_ACCOUNT_GROUP_FUNCTION: defaultEnricher.CloudAccountGroupFunction,
+			mappings.RESOURCE_ORGANIZATION:           defaultEnricher.Organization,
+			mappings.RESOURCE_PLATFORM:               defaultEnricher.CloudPlatform,
+			mappings.RESOURCE_PROVIDER:               defaultEnricher.CloudProvider,
+		},
+		mappings.KUBERNETES_RESOURCE_FIELD_NAME: map[interface{}]interface{}{
+			"key": "value",
+			mappings.KUBERNETES_RESOURCE_CLUSTER_NAME: defaultEnricher.K8sClusterName,
+		},
+		mappings.OBSERVED_TIMESTAMP: ExpectedTime,
+	}
 
-	assert.Nil(t, enricher)
-	assert.Error(t, err)
-}
-
-func TestEnrichRecords(t *testing.T) {
-	var cases = []struct {
-		Name     string
+	type TestCase struct {
+		Test     string
 		Enricher Enricher
 		Input    map[interface{}]interface{}
 		Expected map[interface{}]interface{}
-	}{
+	}
+
+	testCases := []TestCase{
 		{
-			Name: "Adds Account Id",
-			Enricher: Enricher{
-				AccountId:            "1234567",
-				CanvaAccountFunction: DummyAccountFunction,
-			},
-			Input: map[interface{}]interface{}{
-				"log": "hello world",
-				mappings.KUBERNETES_RESOURCE_FIELD_NAME: map[interface{}]interface{}{
-					"key": "value",
-				},
-			},
-			Expected: map[interface{}]interface{}{
-				mappings.OBSERVED_TIMESTAMP: ExpectedTime,
-				"log":                       "hello world",
-				"resource": map[interface{}]interface{}{
-					mappings.RESOURCE_CLOUD_ACCOUNT_ID: "1234567",
-					mappings.RESOURCE_ACCOUNT_GROUP:    DummyAccountFunction,
-				},
-				mappings.KUBERNETES_RESOURCE_FIELD_NAME: map[interface{}]interface{}{
-					"key": "value",
-				},
-			},
+			Test:     "Valid",
+			Enricher: defaultEnricher,
+			Input:    defaultInput,
+			Expected: defaultExpected,
 		},
 		{
-			Name: "Adds Account Group Function",
-			Enricher: Enricher{
-				AccountId:            DummyAccountId,
-				CanvaAccountFunction: "PII",
-			},
-			Input: map[interface{}]interface{}{
-				"log": "hello world",
-				mappings.KUBERNETES_RESOURCE_FIELD_NAME: map[interface{}]interface{}{
-					"key": "value",
-				},
-			},
-			Expected: map[interface{}]interface{}{
-				mappings.OBSERVED_TIMESTAMP: ExpectedTime,
-				"log":                       "hello world",
-				"resource": map[interface{}]interface{}{
-					mappings.RESOURCE_CLOUD_ACCOUNT_ID: DummyAccountId,
-					mappings.RESOURCE_ACCOUNT_GROUP:    "PII",
-				},
-				mappings.KUBERNETES_RESOURCE_FIELD_NAME: map[interface{}]interface{}{
-					"key": "value",
-				},
-			},
-		},
-		{
-			Name: "Drop Log If Log Field Is Empty",
-			Enricher: Enricher{
-				AccountId:            DummyAccountId,
-				CanvaAccountFunction: DummyAccountFunction,
-			},
-			Input: map[interface{}]interface{}{
-				"observedTimestamp": DummyTime,
-				mappings.KUBERNETES_RESOURCE_FIELD_NAME: map[interface{}]interface{}{
-					"key": "value",
-				},
-			},
+			Test:     "Drop log if log field is empty",
+			Enricher: defaultEnricher,
+			Input: func() map[interface{}]interface{} {
+				input := copy(defaultInput)
+				delete(input, mappings.LOG_FIELD_NAME)
+				return input
+			}(),
 			Expected: nil,
 		},
 		{
-			Name: "Enrich placeholder service name if kubernetes dict is empty",
-			Enricher: Enricher{
-				AccountId:            DummyAccountId,
-				CanvaAccountFunction: DummyAccountFunction,
-			},
-			Input: map[interface{}]interface{}{
-				"log": "hello world",
-			},
-			Expected: map[interface{}]interface{}{
-				mappings.OBSERVED_TIMESTAMP: ExpectedTime,
-				"log":                       "hello world",
-				"resource": map[interface{}]interface{}{
-					mappings.RESOURCE_CLOUD_ACCOUNT_ID: DummyAccountId,
-					mappings.RESOURCE_ACCOUNT_GROUP:    DummyAccountFunction,
-				},
-				mappings.KUBERNETES_RESOURCE_FIELD_NAME: map[interface{}]interface{}{
-					mappings.KUBERNETES_CONTAINER_NAME: mappings.PLACEHOLDER_MISSING_KUBERNETES_METADATA,
-				},
-			},
-		},
-	}
+			Test:     "Enrich placeholder service name if kubernetes field is empty",
+			Enricher: defaultEnricher,
+			Input: func() map[interface{}]interface{} {
+				input := copy(defaultInput)
+				delete(input, mappings.KUBERNETES_RESOURCE_FIELD_NAME)
+				return input
+			}(),
+			Expected: func() map[interface{}]interface{} {
+				expected := copy(defaultExpected)
+				expected[mappings.KUBERNETES_RESOURCE_FIELD_NAME] = map[interface{}]interface{}{
+					mappings.KUBERNETES_CONTAINER_NAME:        mappings.PLACEHOLDER_MISSING_KUBERNETES_METADATA,
+					mappings.KUBERNETES_RESOURCE_CLUSTER_NAME: defaultEnricher.K8sClusterName,
+				}
+				return expected
+			}(),
+		}}
 
-	for _, c := range cases {
-		t.Run(c.Name, func(tt *testing.T) {
-			actual := c.Enricher.EnrichRecord(c.Input, DummyTime)
-			assert.Equal(tt, c.Expected, actual)
+	for _, tc := range testCases {
+		t.Run(tc.Test, func(t *testing.T) {
+			actual := tc.Enricher.EnrichRecord(tc.Input, DummyTime)
+			assert.Equal(t, tc.Expected, actual)
 		})
 	}
 }
 
 var (
-	DummyAccountFunction = "general"
-	DummyAccountId       = "Account_Id"
-	DummyTime            = time.Date(2009, time.November, 10, 23, 7, 5, 432000000, time.UTC)
+	DummyAccountId            = "123123123"
+	DummyAccountName          = "Account Name"
+	DummyRegion               = "ap-southeast-1"
+	DummyAccountGroupFunction = "general"
+	DummyClusterName          = "Cluster Name"
+	DummyPartition            = "aws"
+	DummyOrganization         = "canva"
+	DummyProvider             = "aws"
+	DummyPlatform             = "eks"
+	DummyTime                 = time.Date(2009, time.November, 10, 23, 7, 5, 432000000, time.UTC)
 )
 
 var (
 	ExpectedTime = int64(1257894425432)
 )
+
+// Helper function to deep copy map.
+func copy(m map[interface{}]interface{}) map[interface{}]interface{} {
+	newMap := map[interface{}]interface{}{}
+
+	for k, v := range m {
+		vm, ok := v.(map[interface{}]interface{})
+		if ok {
+			newMap[k] = copy(vm)
+		} else {
+			newMap[k] = v
+		}
+	}
+
+	return newMap
+}
