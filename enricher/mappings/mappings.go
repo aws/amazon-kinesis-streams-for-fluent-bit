@@ -6,6 +6,7 @@ const (
 
 const (
 	LOG_FIELD_NAME = "log"
+	MSG_FIELD_NAME = "msg"
 )
 
 const (
