@@ -35,7 +35,7 @@ var _ enricher.IEnricher = (*Enricher)(nil)
 
 func (e Enricher) EnrichRecord(r map[interface{}]interface{}, t time.Time) map[interface{}]interface{} {
 	// Drop log if "log" field is empty
-	if r[mappings.LOG_FIELD_NAME] == nil {
+	if r[mappings.LOG_FIELD_NAME] == nil && r[mappings.MSG_FIELD_NAME] == nil {
 		return nil
 	}
 
