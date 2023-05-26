@@ -16,6 +16,7 @@ func Test_NewEnricher(t *testing.T) {
 			mappings.ENV_REGION:                 DummyRegion,
 			mappings.ENV_ACCOUNT_GROUP_FUNCTION: DummyAccountGroupFunction,
 			mappings.ENV_CLUSTER_NAME:           DummyClusterName,
+			mappings.ENV_NODE_NAME:              DummyNodeName,
 			mappings.ENV_PARTITION:              DummyPartition,
 			mappings.ENV_ORGANISATION:           DummyOrganization,
 			mappings.ENV_PLATFORM:               DummyPlatform,
@@ -42,7 +43,7 @@ func Test_NewEnricher(t *testing.T) {
 
 func Test_EnrichRecord(t *testing.T) {
 	dummyLog := "hello world"
-	defaultInput := map[interface{}]interface{}{
+	defaultInputWithLog := map[interface{}]interface{}{
 		mappings.LOG_FIELD_NAME: dummyLog,
 		mappings.KUBERNETES_RESOURCE_FIELD_NAME: map[interface{}]interface{}{
 			// default value, check if this isn't removed
@@ -57,12 +58,13 @@ func Test_EnrichRecord(t *testing.T) {
 		CloudPartition:            DummyPartition,
 		CloudAccountGroupFunction: DummyAccountGroupFunction,
 		K8sClusterName:            DummyClusterName,
+		K8sNodeName:               DummyNodeName,
 		CloudProvider:             DummyProvider,
 		CloudPlatform:             DummyProvider,
 		Organization:              DummyOrganization,
 	}
 
-	defaultExpected := map[interface{}]interface{}{
+	defaultExpectedWithLog := map[interface{}]interface{}{
 		mappings.LOG_FIELD_NAME: dummyLog,
 		mappings.RESOURCE_FIELD_NAME: map[interface{}]interface{}{
 			mappings.RESOURCE_ACCOUNT_ID:             defaultEnricher.CloudAccountId,
@@ -77,6 +79,7 @@ func Test_EnrichRecord(t *testing.T) {
 		mappings.KUBERNETES_RESOURCE_FIELD_NAME: map[interface{}]interface{}{
 			"key": "value",
 			mappings.KUBERNETES_RESOURCE_CLUSTER_NAME: defaultEnricher.K8sClusterName,
+			mappings.KUBERNETES_RESOURCE_NODE_NAME:    defaultEnricher.K8sNodeName,
 		},
 		mappings.OBSERVED_TIMESTAMP: ExpectedTime,
 	}
@@ -90,16 +93,32 @@ func Test_EnrichRecord(t *testing.T) {
 
 	testCases := []TestCase{
 		{
-			Test:     "Valid",
+			Test:     "Valid with log field",
 			Enricher: defaultEnricher,
-			Input:    defaultInput,
-			Expected: defaultExpected,
+			Input:    defaultInputWithLog,
+			Expected: defaultExpectedWithLog,
 		},
 		{
-			Test:     "Drop log if log field is empty",
+			Test:     "Valid with message field",
 			Enricher: defaultEnricher,
 			Input: func() map[interface{}]interface{} {
-				input := copy(defaultInput)
+				input := copy(defaultInputWithLog)
+				delete(input, mappings.LOG_FIELD_NAME)
+				input[mappings.MESSAGE_FIELD_NAME] = "message"
+				return input
+			}(),
+			Expected: func() map[interface{}]interface{} {
+				expected := copy(defaultExpectedWithLog)
+				delete(expected, mappings.LOG_FIELD_NAME)
+				expected[mappings.MESSAGE_FIELD_NAME] = "message"
+				return expected
+			}(),
+		},
+		{
+			Test:     "Drop log if log field and message is empty",
+			Enricher: defaultEnricher,
+			Input: func() map[interface{}]interface{} {
+				input := copy(defaultInputWithLog)
 				delete(input, mappings.LOG_FIELD_NAME)
 				return input
 			}(),
@@ -109,19 +128,75 @@ func Test_EnrichRecord(t *testing.T) {
 			Test:     "Enrich placeholder service name if kubernetes field is empty",
 			Enricher: defaultEnricher,
 			Input: func() map[interface{}]interface{} {
-				input := copy(defaultInput)
+				input := copy(defaultInputWithLog)
 				delete(input, mappings.KUBERNETES_RESOURCE_FIELD_NAME)
 				return input
 			}(),
 			Expected: func() map[interface{}]interface{} {
-				expected := copy(defaultExpected)
+				expected := copy(defaultExpectedWithLog)
 				expected[mappings.KUBERNETES_RESOURCE_FIELD_NAME] = map[interface{}]interface{}{
 					mappings.KUBERNETES_CONTAINER_NAME:        mappings.PLACEHOLDER_MISSING_KUBERNETES_METADATA,
 					mappings.KUBERNETES_RESOURCE_CLUSTER_NAME: defaultEnricher.K8sClusterName,
+					mappings.KUBERNETES_RESOURCE_NODE_NAME:    defaultEnricher.K8sNodeName,
 				}
 				return expected
 			}(),
-		}}
+		},
+		{
+			Test:     "Enrich service_name if log is an EKS host log",
+			Enricher: defaultEnricher,
+			Input: func() map[interface{}]interface{} {
+				input := map[interface{}]interface{}{
+					"boot_id":                    "03573569ccd4446688990194334a841c",
+					"hostname":                   "localhost",
+					"kernel_device":              "+pci_bus:0000:00",
+					"kernel_subsystem":           "pci_bus",
+					"machine_id":                 "ec2d184089fd93a22cc04a98df97cc6d",
+					"message":                    "pci_bus 0000:00: resource 5 [io  0x0d00-0xffff window]",
+					"priority":                   "7",
+					"source_monotonic_timestamp": "576538",
+					"syslog_facility":            "0",
+					"syslog_identifier":          "kernel",
+					"transport":                  "kernel",
+					"udev_sysname":               "0000:00",
+				}
+				return input
+			}(),
+			Expected: func() map[interface{}]interface{} {
+				expected := map[interface{}]interface{}{
+					"boot_id":                    "03573569ccd4446688990194334a841c",
+					"hostname":                   "localhost",
+					"kernel_device":              "+pci_bus:0000:00",
+					"kernel_subsystem":           "pci_bus",
+					"machine_id":                 "ec2d184089fd93a22cc04a98df97cc6d",
+					"message":                    "pci_bus 0000:00: resource 5 [io  0x0d00-0xffff window]",
+					"priority":                   "7",
+					"source_monotonic_timestamp": "576538",
+					"syslog_facility":            "0",
+					"syslog_identifier":          "kernel",
+					"transport":                  "kernel",
+					"udev_sysname":               "0000:00",
+					mappings.OBSERVED_TIMESTAMP:  ExpectedTime,
+				}
+				expected[mappings.KUBERNETES_RESOURCE_FIELD_NAME] = map[interface{}]interface{}{
+					mappings.KUBERNETES_RESOURCE_NODE_NAME:    defaultEnricher.K8sNodeName,
+					mappings.KUBERNETES_RESOURCE_CLUSTER_NAME: defaultEnricher.K8sClusterName,
+				}
+				expected[mappings.RESOURCE_FIELD_NAME] = map[interface{}]interface{}{
+					mappings.RESOURCE_ACCOUNT_ID:             defaultEnricher.CloudAccountId,
+					mappings.RESOURCE_ACCOUNT_NAME:           defaultEnricher.CloudAccountName,
+					mappings.RESOURCE_REGION:                 defaultEnricher.CloudRegion,
+					mappings.RESOURCE_PARTITION:              defaultEnricher.CloudPartition,
+					mappings.RESOURCE_ACCOUNT_GROUP_FUNCTION: defaultEnricher.CloudAccountGroupFunction,
+					mappings.RESOURCE_ORGANIZATION:           defaultEnricher.Organization,
+					mappings.RESOURCE_PLATFORM:               defaultEnricher.CloudPlatform,
+					mappings.RESOURCE_PROVIDER:               defaultEnricher.CloudProvider,
+					mappings.RESOURCE_SERVICE_NAME:           mappings.EKS_HOST_LOG_SERVICE_NAME,
+				}
+				return expected
+			}(),
+		},
+	}
 
 	for _, tc := range testCases {
 		t.Run(tc.Test, func(t *testing.T) {
@@ -137,6 +212,7 @@ var (
 	DummyRegion               = "ap-southeast-1"
 	DummyAccountGroupFunction = "general"
 	DummyClusterName          = "Cluster Name"
+	DummyNodeName             = "node_name"
 	DummyPartition            = "aws"
 	DummyOrganization         = "canva"
 	DummyProvider             = "aws"
