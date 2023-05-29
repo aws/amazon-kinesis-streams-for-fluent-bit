@@ -33,7 +33,10 @@ import (
 	"github.com/canva/amazon-kinesis-streams-for-fluent-bit/enricher"
 	"github.com/canva/amazon-kinesis-streams-for-fluent-bit/kinesis"
 )
-import "github.com/canva/amazon-kinesis-streams-for-fluent-bit/enricher/ecs"
+import (
+	"github.com/canva/amazon-kinesis-streams-for-fluent-bit/enricher/ecs"
+	"github.com/canva/amazon-kinesis-streams-for-fluent-bit/metrics"
+)
 
 const (
 	// Kinesis API Limit https://docs.aws.amazon.com/sdk-for-go/api/service/kinesis/#Kinesis.PutRecords
@@ -114,6 +117,9 @@ func newKinesisOutput(ctx unsafe.Pointer, pluginID int) (*kinesis.OutputPlugin, 
 
 	enrichEKSRecords := output.FLBPluginConfigKey(ctx, "enrich_eks_records")
 	logrus.Infof("[kinesis %d] plugin parameter enrich_eks_records = %q", pluginID, enrichEKSRecords)
+
+	enableEKSMetrics := output.FLBPluginConfigKey(ctx, "enable_eks_metrics")
+	logrus.Infof("[kinesis %d] plugin parameter enable_eks_metrics = %q", pluginID, enableEKSMetrics)
 
 	if stream == "" || region == "" {
 		return nil, fmt.Errorf("[kinesis %d] stream and region are required configuration parameters", pluginID)
@@ -250,6 +256,14 @@ func newKinesisOutput(ctx unsafe.Pointer, pluginID int) (*kinesis.OutputPlugin, 
 	}
 
 	enr = enricher.NewEnricher(enricherEnable || enricherEksEnable, e)
+
+	if strings.ToLower(enableEKSMetrics) == "true" && enricherEksEnable {
+		ms := metrics.New()
+
+		go func() {
+			ms.Start()
+		}()
+	}
 
 	compress.Init(&compress.Config{
 		Format: aggregationCompressionFormat,
