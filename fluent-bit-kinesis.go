@@ -35,7 +35,7 @@ import (
 )
 import (
 	"github.com/canva/amazon-kinesis-streams-for-fluent-bit/enricher/ecs"
-	"github.com/canva/amazon-kinesis-streams-for-fluent-bit/metrics"
+	"github.com/canva/amazon-kinesis-streams-for-fluent-bit/metricserver"
 )
 
 const (
@@ -230,6 +230,20 @@ func newKinesisOutput(ctx unsafe.Pointer, pluginID int) (*kinesis.OutputPlugin, 
 		}
 	}
 
+	var ms *metricserver.MetricServer
+
+	if strings.ToLower(enableEKSMetrics) == "true" {
+		ms, err := metricserver.New()
+
+		if err != nil {
+			return nil, err
+		}
+
+		go func() {
+			ms.Start()
+		}()
+	}
+
 	var e enricher.IEnricher
 
 	var enricherEnable bool
@@ -243,7 +257,7 @@ func newKinesisOutput(ctx unsafe.Pointer, pluginID int) (*kinesis.OutputPlugin, 
 	// EKS Enricher
 	if strings.ToLower(enrichEKSRecords) == "true" {
 		enricherEksEnable = true
-		e, err = eks.NewEnricher()
+		e, err = eks.NewEnricher(eks.WithMetricServer(ms))
 
 		if err != nil {
 			return nil, err
@@ -256,14 +270,6 @@ func newKinesisOutput(ctx unsafe.Pointer, pluginID int) (*kinesis.OutputPlugin, 
 	}
 
 	enr = enricher.NewEnricher(enricherEnable || enricherEksEnable, e)
-
-	if strings.ToLower(enableEKSMetrics) == "true" && enricherEksEnable {
-		ms := metrics.New()
-
-		go func() {
-			ms.Start()
-		}()
-	}
 
 	compress.Init(&compress.Config{
 		Format: aggregationCompressionFormat,

@@ -13,6 +13,9 @@ const (
 
 const (
 	KUBERNETES_RESOURCE_FIELD_NAME          = "kubernetes"
+	KUBERNETES_LABELS_FIELD_NAME            = "labels"
+	KUBERNETES_LABELS_CANVA_COMPONENT       = "app.canva.k8s/component"
+	KUBERNETES_LABELS_NAME                  = "app.kubernetes.io/nam"
 	KUBERNETES_RESOURCE_CLUSTER_NAME        = "cluster.name"
 	KUBERNETES_CONTAINER_NAME               = "container_name"
 	KUBERNETES_RESOURCE_NODE_NAME           = "node.name"
