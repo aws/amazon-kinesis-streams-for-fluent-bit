@@ -212,6 +212,7 @@ func newPutRecordsClient(roleARN string, awsRegion string, kinesisEndpoint strin
 		eksConfig.Credentials = creds
 		eksConfig.Region = aws.String(awsRegion)
 		eksConfig.HTTPClient = httpClient
+		eksConfig.EndpointResolver = endpoints.ResolverFunc(customResolverFn)
 		svcConfig = eksConfig
 
 		svcSess, err = session.NewSession(svcConfig)
@@ -226,6 +227,7 @@ func newPutRecordsClient(roleARN string, awsRegion string, kinesisEndpoint strin
 		stsConfig.Credentials = creds
 		stsConfig.Region = aws.String(awsRegion)
 		stsConfig.HTTPClient = httpClient
+		stsConfig.EndpointResolver = endpoints.ResolverFunc(customResolverFn)
 		svcConfig = stsConfig
 
 		svcSess, err = session.NewSession(svcConfig)
