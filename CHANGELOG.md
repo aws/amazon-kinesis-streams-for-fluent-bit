@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.10.3
+* Bug: Ensure custom endpoint settings are preserved when using role-based authentication (EKS_POD_EXECUTION_ROLE or role_arn parameter) [#337](https://github.com/aws/amazon-kinesis-streams-for-fluent-bit/pull/337)
+
 ## 1.10.2
 * Enhancement - Upgrade Go version to 1.20
 
