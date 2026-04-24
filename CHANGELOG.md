@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.10.4
+* Enhancement - Update github.com/aws/aws-sdk-go to v1.55.8
+* Enhancement - Update github.com/aws/amazon-kinesis-firehose-for-fluent-bit to v1.7.2
+
 ## 1.10.3
 * Bug: Ensure custom endpoint settings are preserved when using role-based authentication (EKS_POD_EXECUTION_ROLE or role_arn parameter) [#337](https://github.com/aws/amazon-kinesis-streams-for-fluent-bit/pull/337)
 
